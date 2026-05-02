@@ -148,20 +148,49 @@ def listar():
     conn.close()
     return dados
 
-def upload_foto_supabase(foto, prefixo="mini"):
-    extensao = Path(foto.name).suffix
-    nome_limpo = foto.name.replace(" ", "_").replace("'", "").replace('"', "")
-    nome_arquivo = f"{prefixo}_{datetime.now().timestamp()}_{nome_limpo}"
-
-    supabase.storage.from_(SUPABASE_BUCKET).upload(
-        nome_arquivo,
-        foto.getvalue(),
-        {"content-type": foto.type}
+def limpar_nome_arquivo(nome):
+    return (
+        nome.replace(" ", "_")
+            .replace("'", "")
+            .replace('"', "")
+            .replace("ç", "c")
+            .replace("Ç", "C")
+            .replace("ã", "a")
+            .replace("Ã", "A")
+            .replace("á", "a")
+            .replace("Á", "A")
+            .replace("é", "e")
+            .replace("É", "E")
+            .replace("í", "i")
+            .replace("Í", "I")
+            .replace("ó", "o")
+            .replace("Ó", "O")
+            .replace("ú", "u")
+            .replace("Ú", "U")
+            .replace("’", "")
     )
 
-    url_publica = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(nome_arquivo)
+def upload_foto_supabase(foto, prefixo="mini"):
+    nome_limpo = limpar_nome_arquivo(foto.name)
+    nome_arquivo = f"{prefixo}_{datetime.now().timestamp()}_{nome_limpo}"
 
-    return url_publica
+    try:
+        supabase.storage.from_(SUPABASE_BUCKET).upload(
+            path=nome_arquivo,
+            file=foto.getvalue(),
+            file_options={
+                "content-type": foto.type,
+                "upsert": "true"
+            }
+        )
+
+        url_publica = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(nome_arquivo)
+
+        return url_publica
+
+    except Exception as e:
+        st.error(f"Erro ao enviar foto para o Supabase: {e}")
+        return None
 
 def resolver_caminho_foto(caminho_salvo):
     if not caminho_salvo:
@@ -245,7 +274,8 @@ if menu == "Cadastrar":
             with st.spinner("Enviando fotos para a nuvem..."):
                 for foto in fotos_upload:
                     url = upload_foto_supabase(foto, "mini")
-                    caminhos.append(url)
+                    if url:
+                        caminhos.append(url)
 
         salvar(nome, marca, serie, raridade, status, valor, ";".join(caminhos))
         st.success("Mini salvo com sucesso na nuvem! 🔥")
@@ -364,7 +394,8 @@ if menu == "Adicionar fotos":
             with st.spinner("Enviando fotos para a nuvem..."):
                 for foto in fotos_upload:
                     url = upload_foto_supabase(foto, f"mini_{id_escolhido}")
-                    caminhos.append(url)
+                    if url:
+                        caminhos.append(url)
 
             atualizar_foto(id_escolhido, ";".join(caminhos))
             st.success("Fotos adicionadas na nuvem! 📸🔥")
