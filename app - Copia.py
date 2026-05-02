@@ -5,18 +5,12 @@ from datetime import datetime
 from pathlib import Path
 import streamlit as st
 
-# =========================
-# CONFIGURAÇÃO DA PÁGINA
-# =========================
 st.set_page_config(
     page_title="Minha coleção de minis",
     page_icon="🚗",
     layout="wide"
 )
 
-# =========================
-# DARK MODE + ESTILO PREMIUM
-# =========================
 st.markdown("""
 <style>
     .stApp {
@@ -32,21 +26,29 @@ st.markdown("""
         color: #FFFFFF;
     }
 
-    .mini-card {
+    div[data-testid="stMetric"] {
         background: linear-gradient(145deg, #1E293B, #111827);
         border: 1px solid #334155;
+        border-radius: 16px;
+        padding: 15px;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.30);
+    }
+
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background: linear-gradient(145deg, #1E293B, #111827);
         border-radius: 18px;
-        padding: 16px;
-        margin-bottom: 22px;
+        border-color: #334155;
+        padding: 14px;
         box-shadow: 0 8px 25px rgba(0,0,0,0.35);
     }
 
     .mini-title {
         font-size: 20px;
         font-weight: 800;
-        margin-top: 10px;
-        margin-bottom: 8px;
         color: #FFFFFF;
+        min-height: 52px;
+        margin-top: 8px;
+        margin-bottom: 8px;
     }
 
     .mini-info {
@@ -57,7 +59,7 @@ st.markdown("""
 
     .mini-value {
         font-size: 15px;
-        font-weight: 700;
+        font-weight: 800;
         color: #38BDF8;
         margin-top: 8px;
     }
@@ -71,15 +73,8 @@ st.markdown("""
         color: #FACC15;
         font-size: 12px;
         font-weight: 700;
-        margin-bottom: 8px;
-    }
-
-    div[data-testid="stMetric"] {
-        background: linear-gradient(145deg, #1E293B, #111827);
-        border: 1px solid #334155;
-        border-radius: 16px;
-        padding: 15px;
-        box-shadow: 0 6px 18px rgba(0,0,0,0.30);
+        margin-top: 8px;
+        margin-bottom: 6px;
     }
 
     .stButton > button {
@@ -88,6 +83,7 @@ st.markdown("""
         background-color: #1E293B;
         color: white;
         font-weight: 700;
+        height: 40px;
     }
 
     .stButton > button:hover {
@@ -95,24 +91,14 @@ st.markdown("""
         color: white;
         border-color: #38BDF8;
     }
-
-    img {
-        border-radius: 14px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
-# =========================
-# CAMINHOS
-# =========================
 BASE_DIR = Path(__file__).parent
 DB_PATH = BASE_DIR / "colecao.db"
 FOTOS_DIR = BASE_DIR / "fotos"
 FOTOS_DIR.mkdir(exist_ok=True)
 
-# =========================
-# BANCO
-# =========================
 def conectar():
     return sqlite3.connect(DB_PATH)
 
@@ -177,9 +163,6 @@ def lista_fotos_validas(fotos):
 
 criar_banco()
 
-# =========================
-# TÍTULO
-# =========================
 st.markdown("# 🚗 Minha coleção de minis")
 st.markdown("### Seu museu digital de miniaturas 🔥")
 
@@ -188,9 +171,6 @@ menu = st.sidebar.radio(
     ["Cadastrar", "Ver coleção", "Adicionar fotos", "Importar Excel"]
 )
 
-# =========================
-# CADASTRAR
-# =========================
 if menu == "Cadastrar":
     st.header("Cadastrar mini")
 
@@ -234,9 +214,6 @@ if menu == "Cadastrar":
         salvar(nome, marca, serie, raridade, status, valor, ";".join(caminhos))
         st.success("Mini salvo com sucesso! 🔥")
 
-# =========================
-# VER COLEÇÃO
-# =========================
 if menu == "Ver coleção":
     st.header("Minha coleção")
 
@@ -277,51 +254,49 @@ if menu == "Ver coleção":
 
     st.write(f"Resultado: **{len(minis)}** mini(s)")
 
-    colunas = st.columns(3)
+    COLUNAS_POR_LINHA = 3
 
-    for i, mini in enumerate(minis):
-        id_mini, nome, marca, serie, raridade, status, valor, foto = mini
-        fotos_validas = lista_fotos_validas(foto)
+    for linha_inicio in range(0, len(minis), COLUNAS_POR_LINHA):
+        linha = minis[linha_inicio:linha_inicio + COLUNAS_POR_LINHA]
+        colunas = st.columns(COLUNAS_POR_LINHA)
 
-        with colunas[i % 3]:
-            st.markdown('<div class="mini-card">', unsafe_allow_html=True)
+        for coluna, mini in zip(colunas, linha):
+            id_mini, nome, marca, serie, raridade, status, valor, foto = mini
+            fotos_validas = lista_fotos_validas(foto)
 
-            chave = f"foto_index_{id_mini}"
+            with coluna:
+                with st.container(border=True):
+                    chave = f"foto_index_{id_mini}"
 
-            if chave not in st.session_state:
-                st.session_state[chave] = 0
+                    if chave not in st.session_state:
+                        st.session_state[chave] = 0
 
-            if fotos_validas:
-                idx = st.session_state[chave]
-                st.image(fotos_validas[idx], use_container_width=True)
+                    if fotos_validas:
+                        idx = st.session_state[chave]
+                        st.image(fotos_validas[idx], use_container_width=True)
 
-                if len(fotos_validas) > 1:
-                    col_btn1, col_btn2 = st.columns(2)
+                        if len(fotos_validas) > 1:
+                            col_btn1, col_btn2 = st.columns(2)
 
-                    with col_btn1:
-                        if st.button("⬅️", key=f"prev_{id_mini}"):
-                            st.session_state[chave] = (st.session_state[chave] - 1) % len(fotos_validas)
-                            st.rerun()
+                            with col_btn1:
+                                if st.button("⬅️", key=f"prev_{id_mini}"):
+                                    st.session_state[chave] = (st.session_state[chave] - 1) % len(fotos_validas)
+                                    st.rerun()
 
-                    with col_btn2:
-                        if st.button("➡️", key=f"next_{id_mini}"):
-                            st.session_state[chave] = (st.session_state[chave] + 1) % len(fotos_validas)
-                            st.rerun()
-            else:
-                st.info("Sem foto")
+                            with col_btn2:
+                                if st.button("➡️", key=f"next_{id_mini}"):
+                                    st.session_state[chave] = (st.session_state[chave] + 1) % len(fotos_validas)
+                                    st.rerun()
+                    else:
+                        st.info("Sem foto")
 
-            st.markdown(f'<div class="badge">{raridade}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="mini-title">{nome}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="mini-info">🚗 <b>Marca:</b> {marca}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="mini-info">📦 <b>Série:</b> {serie}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="mini-info">⭐ <b>Status:</b> {status}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="mini-value">💰 Valor: R$ {valor:.2f}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="badge">{raridade}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="mini-title">{nome}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="mini-info">🚗 <b>Marca:</b> {marca}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="mini-info">📦 <b>Série:</b> {serie}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="mini-info">⭐ <b>Status:</b> {status}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="mini-value">💰 Valor: R$ {valor:.2f}</div>', unsafe_allow_html=True)
 
-            st.markdown('</div>', unsafe_allow_html=True)
-
-# =========================
-# ADICIONAR FOTOS
-# =========================
 if menu == "Adicionar fotos":
     st.header("Adicionar fotos ao mini")
 
@@ -359,9 +334,6 @@ if menu == "Adicionar fotos":
             atualizar_foto(id_escolhido, ";".join(caminhos))
             st.success("Fotos adicionadas! 📸🔥")
 
-# =========================
-# IMPORTAR EXCEL
-# =========================
 if menu == "Importar Excel":
     st.header("Importar Excel")
 
