@@ -3,6 +3,7 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 import streamlit as st
+from supabase import create_client
 
 st.set_page_config(
     page_title="Minha coleção de minis",
@@ -89,6 +90,12 @@ DB_PATH = BASE_DIR / "colecao.db"
 FOTOS_DIR = BASE_DIR / "fotos"
 FOTOS_DIR.mkdir(exist_ok=True)
 
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+SUPABASE_BUCKET = st.secrets["SUPABASE_BUCKET"]
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 def conectar():
     return sqlite3.connect(DB_PATH)
 
@@ -107,37 +114,6 @@ def criar_banco():
         foto TEXT
     )
     """)
-    conn.commit()
-    conn.close()
-
-def corrigir_caminhos_antigos():
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, foto FROM minis")
-    registros = cursor.fetchall()
-
-    for id_mini, fotos in registros:
-        if not fotos:
-            continue
-
-        novas_fotos = []
-
-        for caminho in fotos.split(";"):
-            caminho = caminho.strip()
-
-            if not caminho:
-                continue
-
-            nome_arquivo = Path(caminho).name
-            novo_caminho = str(Path("fotos") / nome_arquivo)
-            novas_fotos.append(novo_caminho)
-
-        if novas_fotos:
-            cursor.execute(
-                "UPDATE minis SET foto = ? WHERE id = ?",
-                (";".join(novas_fotos), id_mini)
-            )
-
     conn.commit()
     conn.close()
 
@@ -172,14 +148,29 @@ def listar():
     conn.close()
     return dados
 
-def caminho_para_salvar(nome_arquivo):
-    return str(Path("fotos") / nome_arquivo)
+def upload_foto_supabase(foto, prefixo="mini"):
+    extensao = Path(foto.name).suffix
+    nome_limpo = foto.name.replace(" ", "_").replace("'", "").replace('"', "")
+    nome_arquivo = f"{prefixo}_{datetime.now().timestamp()}_{nome_limpo}"
+
+    supabase.storage.from_(SUPABASE_BUCKET).upload(
+        nome_arquivo,
+        foto.getvalue(),
+        {"content-type": foto.type}
+    )
+
+    url_publica = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(nome_arquivo)
+
+    return url_publica
 
 def resolver_caminho_foto(caminho_salvo):
     if not caminho_salvo:
         return None
 
     caminho_salvo = caminho_salvo.strip()
+
+    if caminho_salvo.startswith("http://") or caminho_salvo.startswith("https://"):
+        return caminho_salvo
 
     caminho = Path(caminho_salvo)
     if caminho.exists():
@@ -211,7 +202,6 @@ def lista_fotos_validas(fotos):
     return fotos_validas
 
 criar_banco()
-corrigir_caminhos_antigos()
 
 st.markdown("# 🚗 Minha coleção de minis")
 st.markdown("### Seu museu digital de miniaturas 🔥")
@@ -252,17 +242,13 @@ if menu == "Cadastrar":
         caminhos = []
 
         if fotos_upload:
-            for foto in fotos_upload:
-                nome_arquivo = f"mini_{datetime.now().timestamp()}_{foto.name}"
-                caminho_fisico = FOTOS_DIR / nome_arquivo
-
-                with open(caminho_fisico, "wb") as f:
-                    f.write(foto.getbuffer())
-
-                caminhos.append(caminho_para_salvar(nome_arquivo))
+            with st.spinner("Enviando fotos para a nuvem..."):
+                for foto in fotos_upload:
+                    url = upload_foto_supabase(foto, "mini")
+                    caminhos.append(url)
 
         salvar(nome, marca, serie, raridade, status, valor, ";".join(caminhos))
-        st.success("Mini salvo com sucesso! 🔥")
+        st.success("Mini salvo com sucesso na nuvem! 🔥")
 
 if menu == "Ver coleção":
     st.header("Minha coleção")
@@ -375,17 +361,13 @@ if menu == "Adicionar fotos":
         if fotos_upload and st.button("Salvar fotos 📸"):
             caminhos = []
 
-            for foto in fotos_upload:
-                nome_arquivo = f"mini_{id_escolhido}_{datetime.now().timestamp()}_{foto.name}"
-                caminho_fisico = FOTOS_DIR / nome_arquivo
-
-                with open(caminho_fisico, "wb") as f:
-                    f.write(foto.getbuffer())
-
-                caminhos.append(caminho_para_salvar(nome_arquivo))
+            with st.spinner("Enviando fotos para a nuvem..."):
+                for foto in fotos_upload:
+                    url = upload_foto_supabase(foto, f"mini_{id_escolhido}")
+                    caminhos.append(url)
 
             atualizar_foto(id_escolhido, ";".join(caminhos))
-            st.success("Fotos adicionadas! 📸🔥")
+            st.success("Fotos adicionadas na nuvem! 📸🔥")
 
 if menu == "Importar Excel":
     st.header("Importar Excel")
