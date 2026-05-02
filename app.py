@@ -1,5 +1,4 @@
 import pandas as pd
-import os
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -13,18 +12,9 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    .stApp {
-        background-color: #0E1117;
-        color: #FFFFFF;
-    }
-
-    section[data-testid="stSidebar"] {
-        background-color: #111827;
-    }
-
-    h1, h2, h3 {
-        color: #FFFFFF;
-    }
+    .stApp { background-color: #0E1117; color: #FFFFFF; }
+    section[data-testid="stSidebar"] { background-color: #111827; }
+    h1, h2, h3 { color: #FFFFFF; }
 
     div[data-testid="stMetric"] {
         background: linear-gradient(145deg, #1E293B, #111827);
@@ -120,6 +110,37 @@ def criar_banco():
     conn.commit()
     conn.close()
 
+def corrigir_caminhos_antigos():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, foto FROM minis")
+    registros = cursor.fetchall()
+
+    for id_mini, fotos in registros:
+        if not fotos:
+            continue
+
+        novas_fotos = []
+
+        for caminho in fotos.split(";"):
+            caminho = caminho.strip()
+
+            if not caminho:
+                continue
+
+            nome_arquivo = Path(caminho).name
+            novo_caminho = str(Path("fotos") / nome_arquivo)
+            novas_fotos.append(novo_caminho)
+
+        if novas_fotos:
+            cursor.execute(
+                "UPDATE minis SET foto = ? WHERE id = ?",
+                (";".join(novas_fotos), id_mini)
+            )
+
+    conn.commit()
+    conn.close()
+
 def salvar(nome, marca, serie, raridade, status, valor_pago, foto):
     conn = conectar()
     cursor = conn.cursor()
@@ -160,19 +181,17 @@ def resolver_caminho_foto(caminho_salvo):
 
     caminho_salvo = caminho_salvo.strip()
 
-    # 1. Tenta o caminho exatamente como está salvo
     caminho = Path(caminho_salvo)
     if caminho.exists():
         return str(caminho)
 
-    # 2. Tenta caminho relativo ao projeto
     caminho_relativo = BASE_DIR / caminho_salvo
     if caminho_relativo.exists():
         return str(caminho_relativo)
 
-    # 3. Se veio caminho antigo do Windows, pega só o nome do arquivo
     nome_arquivo = Path(caminho_salvo).name
     caminho_fotos = FOTOS_DIR / nome_arquivo
+
     if caminho_fotos.exists():
         return str(caminho_fotos)
 
@@ -192,6 +211,7 @@ def lista_fotos_validas(fotos):
     return fotos_validas
 
 criar_banco()
+corrigir_caminhos_antigos()
 
 st.markdown("# 🚗 Minha coleção de minis")
 st.markdown("### Seu museu digital de miniaturas 🔥")

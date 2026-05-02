@@ -151,15 +151,45 @@ def listar():
     conn.close()
     return dados
 
+def caminho_para_salvar(nome_arquivo):
+    return str(Path("fotos") / nome_arquivo)
+
+def resolver_caminho_foto(caminho_salvo):
+    if not caminho_salvo:
+        return None
+
+    caminho_salvo = caminho_salvo.strip()
+
+    # 1. Tenta o caminho exatamente como está salvo
+    caminho = Path(caminho_salvo)
+    if caminho.exists():
+        return str(caminho)
+
+    # 2. Tenta caminho relativo ao projeto
+    caminho_relativo = BASE_DIR / caminho_salvo
+    if caminho_relativo.exists():
+        return str(caminho_relativo)
+
+    # 3. Se veio caminho antigo do Windows, pega só o nome do arquivo
+    nome_arquivo = Path(caminho_salvo).name
+    caminho_fotos = FOTOS_DIR / nome_arquivo
+    if caminho_fotos.exists():
+        return str(caminho_fotos)
+
+    return None
+
 def lista_fotos_validas(fotos):
     if not fotos:
         return []
 
-    return [
-        caminho.strip()
-        for caminho in fotos.split(";")
-        if caminho.strip() and os.path.exists(caminho.strip())
-    ]
+    fotos_validas = []
+
+    for item in fotos.split(";"):
+        caminho_resolvido = resolver_caminho_foto(item)
+        if caminho_resolvido:
+            fotos_validas.append(caminho_resolvido)
+
+    return fotos_validas
 
 criar_banco()
 
@@ -204,12 +234,12 @@ if menu == "Cadastrar":
         if fotos_upload:
             for foto in fotos_upload:
                 nome_arquivo = f"mini_{datetime.now().timestamp()}_{foto.name}"
-                caminho = FOTOS_DIR / nome_arquivo
+                caminho_fisico = FOTOS_DIR / nome_arquivo
 
-                with open(caminho, "wb") as f:
+                with open(caminho_fisico, "wb") as f:
                     f.write(foto.getbuffer())
 
-                caminhos.append(str(caminho))
+                caminhos.append(caminho_para_salvar(nome_arquivo))
 
         salvar(nome, marca, serie, raridade, status, valor, ";".join(caminhos))
         st.success("Mini salvo com sucesso! 🔥")
@@ -272,6 +302,9 @@ if menu == "Ver coleção":
                         st.session_state[chave] = 0
 
                     if fotos_validas:
+                        if st.session_state[chave] >= len(fotos_validas):
+                            st.session_state[chave] = 0
+
                         idx = st.session_state[chave]
                         st.image(fotos_validas[idx], use_container_width=True)
 
@@ -324,12 +357,12 @@ if menu == "Adicionar fotos":
 
             for foto in fotos_upload:
                 nome_arquivo = f"mini_{id_escolhido}_{datetime.now().timestamp()}_{foto.name}"
-                caminho = FOTOS_DIR / nome_arquivo
+                caminho_fisico = FOTOS_DIR / nome_arquivo
 
-                with open(caminho, "wb") as f:
+                with open(caminho_fisico, "wb") as f:
                     f.write(foto.getbuffer())
 
-                caminhos.append(str(caminho))
+                caminhos.append(caminho_para_salvar(nome_arquivo))
 
             atualizar_foto(id_escolhido, ";".join(caminhos))
             st.success("Fotos adicionadas! 📸🔥")
