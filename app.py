@@ -1,4 +1,5 @@
 import pandas as pd
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 import streamlit as st
@@ -84,57 +85,67 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+BASE_DIR = Path(__file__).parent
+DB_PATH = BASE_DIR / "colecao.db"
+FOTOS_DIR = BASE_DIR / "fotos"
+FOTOS_DIR.mkdir(exist_ok=True)
+
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 SUPABASE_BUCKET = st.secrets["SUPABASE_BUCKET"]
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# =========================
-# FUNÇÕES SUPABASE
-# =========================
-def salvar(nome, marca, serie, raridade, status, valor_pago, foto):
-    dados = {
-        "nome": nome,
-        "marca": marca,
-        "serie": serie,
-        "raridade": raridade,
-        "status": status,
-        "valor_pago": float(valor_pago) if valor_pago else 0,
-        "foto": foto
-    }
+def conectar():
+    return sqlite3.connect(DB_PATH)
 
-    supabase.table("minis").insert(dados).execute()
+def criar_banco():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS minis (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT,
+        marca TEXT,
+        serie TEXT,
+        raridade TEXT,
+        status TEXT,
+        valor_pago REAL,
+        foto TEXT
+    )
+    """)
+    conn.commit()
+    conn.close()
+
+def salvar(nome, marca, serie, raridade, status, valor_pago, foto):
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("""
+    INSERT INTO minis (nome, marca, serie, raridade, status, valor_pago, foto)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (nome, marca, serie, raridade, status, valor_pago, foto))
+    conn.commit()
+    conn.close()
 
 def atualizar_foto(id_mini, novas_fotos):
-    atual = supabase.table("minis").select("foto").eq("id", id_mini).execute()
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("SELECT foto FROM minis WHERE id = ?", (id_mini,))
+    atual = cursor.fetchone()
 
-    fotos_atuais = ""
-
-    if atual.data and len(atual.data) > 0:
-        fotos_atuais = atual.data[0].get("foto") or ""
-
+    fotos_atuais = atual[0] if atual and atual[0] else ""
     fotos_final = fotos_atuais + ";" + novas_fotos if fotos_atuais else novas_fotos
 
-    supabase.table("minis").update({"foto": fotos_final}).eq("id", id_mini).execute()
+    cursor.execute("UPDATE minis SET foto = ? WHERE id = ?", (fotos_final, id_mini))
+    conn.commit()
+    conn.close()
 
 def listar():
-    resposta = supabase.table("minis").select("*").order("id", desc=True).execute()
-
-    dados = []
-
-    for item in resposta.data:
-        dados.append((
-            item.get("id"),
-            item.get("nome") or "",
-            item.get("marca") or "",
-            item.get("serie") or "",
-            item.get("raridade") or "",
-            item.get("status") or "",
-            float(item.get("valor_pago") or 0),
-            item.get("foto") or ""
-        ))
-
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM minis ORDER BY id DESC")
+    dados = cursor.fetchall()
+    conn.close()
     return dados
 
 def limpar_nome_arquivo(nome):
@@ -157,9 +168,6 @@ def limpar_nome_arquivo(nome):
             .replace("ú", "u")
             .replace("Ú", "U")
             .replace("’", "")
-            .replace("(", "")
-            .replace(")", "")
-            .replace("#", "")
     )
 
 def upload_foto_supabase(foto, prefixo="mini"):
@@ -183,19 +191,46 @@ def upload_foto_supabase(foto, prefixo="mini"):
         st.error(f"Erro ao enviar foto para o Supabase: {e}")
         return None
 
+def resolver_caminho_foto(caminho_salvo):
+    if not caminho_salvo:
+        return None
+
+    caminho_salvo = caminho_salvo.strip()
+
+    if caminho_salvo.startswith("http://") or caminho_salvo.startswith("https://"):
+        return caminho_salvo
+
+    caminho = Path(caminho_salvo)
+    if caminho.exists():
+        return str(caminho)
+
+    caminho_relativo = BASE_DIR / caminho_salvo
+    if caminho_relativo.exists():
+        return str(caminho_relativo)
+
+    nome_arquivo = Path(caminho_salvo).name
+    caminho_fotos = FOTOS_DIR / nome_arquivo
+
+    if caminho_fotos.exists():
+        return str(caminho_fotos)
+
+    return None
+
 def lista_fotos_validas(fotos):
     if not fotos:
         return []
 
-    return [
-        item.strip()
-        for item in fotos.split(";")
-        if item.strip()
-    ]
+    fotos_validas = []
 
-# =========================
-# TÍTULO
-# =========================
+    for item in fotos.split(";"):
+        caminho_resolvido = resolver_caminho_foto(item)
+        if caminho_resolvido:
+            fotos_validas.append(caminho_resolvido)
+
+    return fotos_validas
+
+criar_banco()
+
 st.markdown("# 🚗 Minha coleção de minis")
 st.markdown("### Seu museu digital de miniaturas 🔥")
 
@@ -221,7 +256,7 @@ else:
 menu = st.sidebar.radio("Menu", opcoes_menu)
 
 # =========================
-# CADASTRAR
+# CADASTRAR — SOMENTE ADMIN
 # =========================
 if menu == "Cadastrar" and admin_logado:
     st.header("Cadastrar mini")
@@ -261,11 +296,10 @@ if menu == "Cadastrar" and admin_logado:
                         caminhos.append(url)
 
         salvar(nome, marca, serie, raridade, status, valor, ";".join(caminhos))
-        st.success("Mini salvo com sucesso no Supabase! 🔥")
-        st.rerun()
+        st.success("Mini salvo com sucesso na nuvem! 🔥")
 
 # =========================
-# VER COLEÇÃO
+# VER COLEÇÃO — VISITANTE E ADMIN
 # =========================
 if menu == "Ver coleção":
     st.header("Minha coleção")
@@ -274,12 +308,11 @@ if menu == "Ver coleção":
 
     total_minis = len(minis)
     valor_total = sum([m[6] for m in minis if m[6]])
-    categorias = len(set([m[4] for m in minis if m[4]]))
 
     col1, col2, col3 = st.columns(3)
     col1.metric("🚗 Total de minis", total_minis)
     col2.metric("💰 Valor total", f"R$ {valor_total:.2f}")
-    col3.metric("🏁 Categorias", categorias)
+    col3.metric("🏁 Categorias", len(set([m[4] for m in minis if m[4]])))
 
     st.markdown("---")
 
@@ -355,7 +388,7 @@ if menu == "Ver coleção":
                     st.markdown(f'<div class="mini-value">💰 Valor: R$ {valor:.2f}</div>', unsafe_allow_html=True)
 
 # =========================
-# ADICIONAR FOTOS
+# ADICIONAR FOTOS — SOMENTE ADMIN
 # =========================
 if menu == "Adicionar fotos" and admin_logado:
     st.header("Adicionar fotos ao mini")
@@ -388,15 +421,11 @@ if menu == "Adicionar fotos" and admin_logado:
                     if url:
                         caminhos.append(url)
 
-            if caminhos:
-                atualizar_foto(id_escolhido, ";".join(caminhos))
-                st.success("Fotos adicionadas no Supabase! 📸🔥")
-                st.rerun()
-            else:
-                st.error("Nenhuma foto foi enviada corretamente.")
+            atualizar_foto(id_escolhido, ";".join(caminhos))
+            st.success("Fotos adicionadas na nuvem! 📸🔥")
 
 # =========================
-# IMPORTAR EXCEL
+# IMPORTAR EXCEL — SOMENTE ADMIN
 # =========================
 if menu == "Importar Excel" and admin_logado:
     st.header("Importar Excel")
@@ -408,8 +437,14 @@ if menu == "Importar Excel" and admin_logado:
         st.dataframe(df, use_container_width=True)
 
         if st.button("Importar planilha 🔥"):
+            conn = conectar()
+            cursor = conn.cursor()
+
             for _, row in df.iterrows():
-                salvar(
+                cursor.execute("""
+                INSERT INTO minis (nome, marca, serie, raridade, status, valor_pago, foto)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (
                     row.get("Nome", ""),
                     row.get("Marca", ""),
                     row.get("Série", ""),
@@ -417,7 +452,8 @@ if menu == "Importar Excel" and admin_logado:
                     row.get("Status", "Tenho"),
                     row.get("Valor pago", 0),
                     ""
-                )
+                ))
 
-            st.success("Importado com sucesso para o Supabase 🔥")
-            st.rerun()
+            conn.commit()
+            conn.close()
+            st.success("Importado com sucesso 🔥")
