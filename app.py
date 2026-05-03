@@ -185,7 +185,6 @@ def upload_foto_supabase(foto, prefixo="mini"):
         )
 
         url_publica = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(nome_arquivo)
-
         return url_publica
 
     except Exception as e:
@@ -235,12 +234,31 @@ criar_banco()
 st.markdown("# 🚗 Minha coleção de minis")
 st.markdown("### Seu museu digital de miniaturas 🔥")
 
-menu = st.sidebar.radio(
-    "Menu",
-    ["Cadastrar", "Ver coleção", "Adicionar fotos", "Importar Excel"]
+# =========================
+# SEGURANÇA / MODO ADMIN
+# =========================
+st.sidebar.markdown("## 🔐 Acesso")
+
+senha_digitada = st.sidebar.text_input(
+    "Senha de administrador",
+    type="password"
 )
 
-if menu == "Cadastrar":
+admin_logado = senha_digitada == st.secrets.get("ADMIN_PASSWORD", "")
+
+if admin_logado:
+    st.sidebar.success("Modo administrador ativo 🔥")
+    opcoes_menu = ["Cadastrar", "Ver coleção", "Adicionar fotos", "Importar Excel"]
+else:
+    st.sidebar.info("Modo visitante: somente visualização")
+    opcoes_menu = ["Ver coleção"]
+
+menu = st.sidebar.radio("Menu", opcoes_menu)
+
+# =========================
+# CADASTRAR — SOMENTE ADMIN
+# =========================
+if menu == "Cadastrar" and admin_logado:
     st.header("Cadastrar mini")
 
     col1, col2 = st.columns(2)
@@ -280,6 +298,9 @@ if menu == "Cadastrar":
         salvar(nome, marca, serie, raridade, status, valor, ";".join(caminhos))
         st.success("Mini salvo com sucesso na nuvem! 🔥")
 
+# =========================
+# VER COLEÇÃO — VISITANTE E ADMIN
+# =========================
 if menu == "Ver coleção":
     st.header("Minha coleção")
 
@@ -366,7 +387,10 @@ if menu == "Ver coleção":
                     st.markdown(f'<div class="mini-info">⭐ <b>Status:</b> {status}</div>', unsafe_allow_html=True)
                     st.markdown(f'<div class="mini-value">💰 Valor: R$ {valor:.2f}</div>', unsafe_allow_html=True)
 
-if menu == "Adicionar fotos":
+# =========================
+# ADICIONAR FOTOS — SOMENTE ADMIN
+# =========================
+if menu == "Adicionar fotos" and admin_logado:
     st.header("Adicionar fotos ao mini")
 
     minis = listar()
@@ -400,7 +424,10 @@ if menu == "Adicionar fotos":
             atualizar_foto(id_escolhido, ";".join(caminhos))
             st.success("Fotos adicionadas na nuvem! 📸🔥")
 
-if menu == "Importar Excel":
+# =========================
+# IMPORTAR EXCEL — SOMENTE ADMIN
+# =========================
+if menu == "Importar Excel" and admin_logado:
     st.header("Importar Excel")
 
     arquivo = st.file_uploader("Planilha", type=["xlsx"])
