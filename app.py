@@ -353,30 +353,8 @@ if menu == "Ver coleção":
 
             with coluna:
                 with st.container(border=True):
-                    chave = f"foto_index_{id_mini}"
-
-                    if chave not in st.session_state:
-                        st.session_state[chave] = 0
-
                     if fotos_validas:
-                        if st.session_state[chave] >= len(fotos_validas):
-                            st.session_state[chave] = 0
-
-                        idx = st.session_state[chave]
-                        st.image(fotos_validas[idx], use_container_width=True)
-
-                        if len(fotos_validas) > 1:
-                            col_btn1, col_btn2 = st.columns(2)
-
-                            with col_btn1:
-                                if st.button("⬅️", key=f"prev_{id_mini}"):
-                                    st.session_state[chave] = (st.session_state[chave] - 1) % len(fotos_validas)
-                                    st.rerun()
-
-                            with col_btn2:
-                                if st.button("➡️", key=f"next_{id_mini}"):
-                                    st.session_state[chave] = (st.session_state[chave] + 1) % len(fotos_validas)
-                                    st.rerun()
+                        st.image(fotos_validas, use_container_width=True)
                     else:
                         st.info("Sem foto")
 
