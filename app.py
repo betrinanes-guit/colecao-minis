@@ -243,75 +243,92 @@ def exibir_carrossel(fotos, id_mini):
         st.info("Sem foto")
         return
 
-    imagens_js = "[" + ",".join([f'"{html.escape(img)}"' for img in imagens]) + "]"
+    slides_html = ""
+    dots_html = ""
+
+    for i, img in enumerate(imagens):
+        active = "active" if i == 0 else ""
+
+        slides_html += f"""
+        <img class="slide_{id_mini} {active}" src="{html.escape(img)}">
+        """
+
+        dots_html += f"""
+        <span class="dot_{id_mini} {active}" onclick="mostrar_{id_mini}({i})"></span>
+        """
 
     components.html(f"""
-    <div style="width:100%; text-align:center;">
-        <img id="img_{id_mini}" src="{html.escape(imagens[0])}"
-             style="
-                width:100%;
-                max-height:520px;
-                object-fit:contain;
-                background:#0E1117;
-                border-radius:14px;
-             " />
+    <div class="carousel_{id_mini}">
+        {slides_html}
 
-        <div style="
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            gap:14px;
-            margin-top:10px;
-        ">
-            <button onclick="prev_{id_mini}()"
-                style="
-                    background:#1E293B;
-                    color:white;
-                    border:1px solid #334155;
-                    border-radius:12px;
-                    padding:8px 16px;
-                    cursor:pointer;
-                    font-weight:700;
-                ">⬅️</button>
-
-            <span id="contador_{id_mini}" style="color:#CBD5E1; font-size:13px;">
-                1 / {len(imagens)}
-            </span>
-
-            <button onclick="next_{id_mini}()"
-                style="
-                    background:#1E293B;
-                    color:white;
-                    border:1px solid #334155;
-                    border-radius:12px;
-                    padding:8px 16px;
-                    cursor:pointer;
-                    font-weight:700;
-                ">➡️</button>
+        <div class="dots_{id_mini}">
+            {dots_html}
         </div>
     </div>
 
+    <style>
+        .carousel_{id_mini} {{
+            position: relative;
+            width: 100%;
+            height: 300px;
+            background: #0E1117;
+            border-radius: 16px;
+            overflow: hidden;
+        }}
+
+        .slide_{id_mini} {{
+            display: none;
+            width: 100%;
+            height: 300px;
+            object-fit: contain;
+            background: #0E1117;
+            border-radius: 16px;
+        }}
+
+        .slide_{id_mini}.active {{
+            display: block;
+        }}
+
+        .dots_{id_mini} {{
+            position: absolute;
+            bottom: 12px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            z-index: 10;
+        }}
+
+        .dot_{id_mini} {{
+            height: 10px;
+            width: 10px;
+            margin: 0 4px;
+            background-color: rgba(255,255,255,0.45);
+            border-radius: 50%;
+            display: inline-block;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            border: 1px solid rgba(255,255,255,0.6);
+        }}
+
+        .dot_{id_mini}.active {{
+            background-color: #FFFFFF;
+            transform: scale(1.25);
+        }}
+    </style>
+
     <script>
-        const imagens_{id_mini} = {imagens_js};
-        let atual_{id_mini} = 0;
+        function mostrar_{id_mini}(index) {{
+            const slides = document.querySelectorAll(".slide_{id_mini}");
+            const dots = document.querySelectorAll(".dot_{id_mini}");
 
-        function mostrar_{id_mini}() {{
-            document.getElementById("img_{id_mini}").src = imagens_{id_mini}[atual_{id_mini}];
-            document.getElementById("contador_{id_mini}").innerText =
-                (atual_{id_mini} + 1) + " / " + imagens_{id_mini}.length;
-        }}
+            slides.forEach(slide => slide.classList.remove("active"));
+            dots.forEach(dot => dot.classList.remove("active"));
 
-        function next_{id_mini}() {{
-            atual_{id_mini} = (atual_{id_mini} + 1) % imagens_{id_mini}.length;
-            mostrar_{id_mini}();
-        }}
-
-        function prev_{id_mini}() {{
-            atual_{id_mini} = (atual_{id_mini} - 1 + imagens_{id_mini}.length) % imagens_{id_mini}.length;
-            mostrar_{id_mini}();
+            slides[index].classList.add("active");
+            dots[index].classList.add("active");
         }}
     </script>
-    """, height=610)
+    """, height=320)
 
 criar_banco()
 
