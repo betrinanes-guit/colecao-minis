@@ -2,7 +2,6 @@ import base64
 import html
 import mimetypes
 import pandas as pd
-import sqlite3
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -76,7 +75,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 BASE_DIR = Path(__file__).parent
-DB_PATH = BASE_DIR / "colecao.db"
 FOTOS_DIR = BASE_DIR / "fotos"
 FOTOS_DIR.mkdir(exist_ok=True)
 
@@ -86,57 +84,62 @@ SUPABASE_BUCKET = st.secrets["SUPABASE_BUCKET"]
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def conectar():
-    return sqlite3.connect(DB_PATH)
-
 def criar_banco():
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS minis (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome TEXT,
-        marca TEXT,
-        serie TEXT,
-        raridade TEXT,
-        status TEXT,
-        valor_pago REAL,
-        foto TEXT
-    )
-    """)
-    conn.commit()
-    conn.close()
+    pass
 
 def salvar(nome, marca, serie, raridade, status, valor_pago, foto):
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute("""
-    INSERT INTO minis (nome, marca, serie, raridade, status, valor_pago, foto)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (nome, marca, serie, raridade, status, valor_pago, foto))
-    conn.commit()
-    conn.close()
+    try:
+        supabase.table("minis").insert({
+            "nome": nome,
+            "marca": marca,
+            "serie": serie,
+            "raridade": raridade,
+            "status": status,
+            "valor_pago": valor_pago,
+            "foto": foto
+        }).execute()
+    except Exception as e:
+        st.error(f"Erro ao salvar mini no Supabase: {e}")
 
 def atualizar_foto(id_mini, novas_fotos):
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute("SELECT foto FROM minis WHERE id = ?", (id_mini,))
-    atual = cursor.fetchone()
+    try:
+        resposta = supabase.table("minis").select("foto").eq("id", id_mini).execute()
 
-    fotos_atuais = atual[0] if atual and atual[0] else ""
-    fotos_final = fotos_atuais + ";" + novas_fotos if fotos_atuais else novas_fotos
+        fotos_atuais = ""
+        if resposta.data and resposta.data[0].get("foto"):
+            fotos_atuais = resposta.data[0]["foto"]
 
-    cursor.execute("UPDATE minis SET foto = ? WHERE id = ?", (fotos_final, id_mini))
-    conn.commit()
-    conn.close()
+        fotos_final = fotos_atuais + ";" + novas_fotos if fotos_atuais else novas_fotos
+
+        supabase.table("minis").update({
+            "foto": fotos_final
+        }).eq("id", id_mini).execute()
+
+    except Exception as e:
+        st.error(f"Erro ao atualizar fotos no Supabase: {e}")
 
 def listar():
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM minis ORDER BY id DESC")
-    dados = cursor.fetchall()
-    conn.close()
-    return dados
+    try:
+        resposta = supabase.table("minis").select("*").order("id", desc=True).execute()
+
+        dados = []
+        for m in resposta.data:
+            dados.append((
+                m.get("id"),
+                m.get("nome", ""),
+                m.get("marca", ""),
+                m.get("serie", ""),
+                m.get("raridade", ""),
+                m.get("status", ""),
+                float(m.get("valor_pago") or 0),
+                m.get("foto", "")
+            ))
+
+        return dados
+
+    except Exception as e:
+        st.error(f"Erro ao listar minis do Supabase: {e}")
+        return []
 
 def limpar_nome_arquivo(nome):
     return (
@@ -394,7 +397,7 @@ if menu == "Cadastrar" and admin_logado:
                         caminhos.append(url)
 
         salvar(nome, marca, serie, raridade, status, valor, ";".join(caminhos))
-        st.success("Mini salvo com sucesso na nuvem! 🔥")
+        st.success("Mini salvo com sucesso no Supabase! 🔥")
 
 if menu == "Ver coleção":
     st.header("Minha coleção")
@@ -489,7 +492,7 @@ if menu == "Adicionar fotos" and admin_logado:
                         caminhos.append(url)
 
             atualizar_foto(id_escolhido, ";".join(caminhos))
-            st.success("Fotos adicionadas na nuvem! 📸🔥")
+            st.success("Fotos adicionadas no Supabase! 📸🔥")
 
 if menu == "Importar Excel" and admin_logado:
     st.header("Importar Excel")
@@ -501,23 +504,24 @@ if menu == "Importar Excel" and admin_logado:
         st.dataframe(df, use_container_width=True)
 
         if st.button("Importar planilha 🔥"):
-            conn = conectar()
-            cursor = conn.cursor()
+            try:
+                registros = []
 
-            for _, row in df.iterrows():
-                cursor.execute("""
-                INSERT INTO minis (nome, marca, serie, raridade, status, valor_pago, foto)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    row.get("Nome", ""),
-                    row.get("Marca", ""),
-                    row.get("Série", ""),
-                    row.get("Raridade", ""),
-                    row.get("Status", "Tenho"),
-                    row.get("Valor pago", 0),
-                    ""
-                ))
+                for _, row in df.iterrows():
+                    registros.append({
+                        "nome": row.get("Nome", ""),
+                        "marca": row.get("Marca", ""),
+                        "serie": row.get("Série", ""),
+                        "raridade": row.get("Raridade", ""),
+                        "status": row.get("Status", "Tenho"),
+                        "valor_pago": float(row.get("Valor pago", 0) or 0),
+                        "foto": ""
+                    })
 
-            conn.commit()
-            conn.close()
-            st.success("Importado com sucesso 🔥")
+                if registros:
+                    supabase.table("minis").insert(registros).execute()
+
+                st.success("Importado com sucesso para o Supabase 🔥")
+
+            except Exception as e:
+                st.error(f"Erro ao importar planilha para o Supabase: {e}")
