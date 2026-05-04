@@ -299,20 +299,23 @@ def exibir_carrossel(fotos, id_mini):
         }}
 
         .dot_{id_mini} {{
-            height: 10px;
-            width: 10px;
+            height: 11px;
+            width: 11px;
             margin: 0 4px;
-            background-color: rgba(255,255,255,0.45);
+            background-color: rgba(15, 23, 42, 0.78);
             border-radius: 50%;
             display: inline-block;
             cursor: pointer;
             transition: all 0.25s ease;
-            border: 1px solid rgba(255,255,255,0.6);
+            border: 2px solid #FFFFFF;
+            box-shadow: 0 0 7px rgba(0,0,0,0.90);
         }}
 
         .dot_{id_mini}.active {{
-            background-color: #FFFFFF;
-            transform: scale(1.25);
+            background-color: #38BDF8;
+            border: 2px solid #FFFFFF;
+            transform: scale(1.35);
+            box-shadow: 0 0 9px rgba(0,0,0,0.95);
         }}
     </style>
 
