@@ -1,8 +1,13 @@
+import base64
+import html
+import mimetypes
 import pandas as pd
 import sqlite3
+import streamlit as st
+import streamlit.components.v1 as components
+
 from datetime import datetime
 from pathlib import Path
-import streamlit as st
 from supabase import create_client
 
 st.set_page_config(
@@ -66,21 +71,6 @@ st.markdown("""
         font-weight: 700;
         margin-top: 8px;
         margin-bottom: 6px;
-    }
-
-    .stButton > button {
-        border-radius: 12px;
-        border: 1px solid #334155;
-        background-color: #1E293B;
-        color: white;
-        font-weight: 700;
-        height: 40px;
-    }
-
-    .stButton > button:hover {
-        background-color: #2563EB;
-        color: white;
-        border-color: #38BDF8;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -229,14 +219,105 @@ def lista_fotos_validas(fotos):
 
     return fotos_validas
 
+def imagem_para_src(caminho):
+    if caminho.startswith("http://") or caminho.startswith("https://"):
+        return caminho
+
+    try:
+        mime = mimetypes.guess_type(caminho)[0] or "image/png"
+        with open(caminho, "rb") as f:
+            dados = base64.b64encode(f.read()).decode("utf-8")
+        return f"data:{mime};base64,{dados}"
+    except Exception:
+        return ""
+
+def exibir_carrossel(fotos, id_mini):
+    imagens = []
+
+    for foto in fotos:
+        src = imagem_para_src(foto)
+        if src:
+            imagens.append(src)
+
+    if not imagens:
+        st.info("Sem foto")
+        return
+
+    imagens_js = "[" + ",".join([f'"{html.escape(img)}"' for img in imagens]) + "]"
+
+    components.html(f"""
+    <div style="width:100%; text-align:center;">
+        <img id="img_{id_mini}" src="{html.escape(imagens[0])}"
+             style="
+                width:100%;
+                max-height:520px;
+                object-fit:contain;
+                background:#0E1117;
+                border-radius:14px;
+             " />
+
+        <div style="
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            gap:14px;
+            margin-top:10px;
+        ">
+            <button onclick="prev_{id_mini}()"
+                style="
+                    background:#1E293B;
+                    color:white;
+                    border:1px solid #334155;
+                    border-radius:12px;
+                    padding:8px 16px;
+                    cursor:pointer;
+                    font-weight:700;
+                ">⬅️</button>
+
+            <span id="contador_{id_mini}" style="color:#CBD5E1; font-size:13px;">
+                1 / {len(imagens)}
+            </span>
+
+            <button onclick="next_{id_mini}()"
+                style="
+                    background:#1E293B;
+                    color:white;
+                    border:1px solid #334155;
+                    border-radius:12px;
+                    padding:8px 16px;
+                    cursor:pointer;
+                    font-weight:700;
+                ">➡️</button>
+        </div>
+    </div>
+
+    <script>
+        const imagens_{id_mini} = {imagens_js};
+        let atual_{id_mini} = 0;
+
+        function mostrar_{id_mini}() {{
+            document.getElementById("img_{id_mini}").src = imagens_{id_mini}[atual_{id_mini}];
+            document.getElementById("contador_{id_mini}").innerText =
+                (atual_{id_mini} + 1) + " / " + imagens_{id_mini}.length;
+        }}
+
+        function next_{id_mini}() {{
+            atual_{id_mini} = (atual_{id_mini} + 1) % imagens_{id_mini}.length;
+            mostrar_{id_mini}();
+        }}
+
+        function prev_{id_mini}() {{
+            atual_{id_mini} = (atual_{id_mini} - 1 + imagens_{id_mini}.length) % imagens_{id_mini}.length;
+            mostrar_{id_mini}();
+        }}
+    </script>
+    """, height=610)
+
 criar_banco()
 
 st.markdown("# 🚗 Minha coleção de minis")
 st.markdown("### Seu museu digital de miniaturas 🔥")
 
-# =========================
-# SEGURANÇA / MODO ADMIN
-# =========================
 st.sidebar.markdown("## 🔐 Acesso")
 
 senha_digitada = st.sidebar.text_input(
@@ -255,9 +336,6 @@ else:
 
 menu = st.sidebar.radio("Menu", opcoes_menu)
 
-# =========================
-# CADASTRAR — SOMENTE ADMIN
-# =========================
 if menu == "Cadastrar" and admin_logado:
     st.header("Cadastrar mini")
 
@@ -298,9 +376,6 @@ if menu == "Cadastrar" and admin_logado:
         salvar(nome, marca, serie, raridade, status, valor, ";".join(caminhos))
         st.success("Mini salvo com sucesso na nuvem! 🔥")
 
-# =========================
-# VER COLEÇÃO — VISITANTE E ADMIN
-# =========================
 if menu == "Ver coleção":
     st.header("Minha coleção")
 
@@ -353,10 +428,7 @@ if menu == "Ver coleção":
 
             with coluna:
                 with st.container(border=True):
-                    if fotos_validas:
-                        st.image(fotos_validas, use_container_width=True)
-                    else:
-                        st.info("Sem foto")
+                    exibir_carrossel(fotos_validas, id_mini)
 
                     st.markdown(f'<div class="badge">{raridade}</div>', unsafe_allow_html=True)
                     st.markdown(f'<div class="mini-title">{nome}</div>', unsafe_allow_html=True)
@@ -365,9 +437,6 @@ if menu == "Ver coleção":
                     st.markdown(f'<div class="mini-info">⭐ <b>Status:</b> {status}</div>', unsafe_allow_html=True)
                     st.markdown(f'<div class="mini-value">💰 Valor: R$ {valor:.2f}</div>', unsafe_allow_html=True)
 
-# =========================
-# ADICIONAR FOTOS — SOMENTE ADMIN
-# =========================
 if menu == "Adicionar fotos" and admin_logado:
     st.header("Adicionar fotos ao mini")
 
@@ -402,9 +471,6 @@ if menu == "Adicionar fotos" and admin_logado:
             atualizar_foto(id_escolhido, ";".join(caminhos))
             st.success("Fotos adicionadas na nuvem! 📸🔥")
 
-# =========================
-# IMPORTAR EXCEL — SOMENTE ADMIN
-# =========================
 if menu == "Importar Excel" and admin_logado:
     st.header("Importar Excel")
 
