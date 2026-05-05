@@ -1108,3 +1108,4 @@ if menu == "Importar Excel" and admin_logado:
 
             except Exception as e:
                 st.error(f"Erro ao importar planilha para o Supabase: {e}")
+# forcar redeploy streamlit
