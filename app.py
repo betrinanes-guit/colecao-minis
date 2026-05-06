@@ -2,13 +2,10 @@ import base64
 import html
 import mimetypes
 import re
-import time
 from urllib.parse import unquote
 
 import pandas as pd
-import requests
 import streamlit as st
-import streamlit.components.v1 as components
 
 from datetime import datetime
 from pathlib import Path
@@ -234,6 +231,84 @@ st.markdown("""
     .stSelectbox div[data-baseweb="select"] {
         border-radius: 14px;
     }
+
+    /* ================= MOBILE PREMIUM ================= */
+    @media (max-width: 768px) {
+        .block-container {
+            padding-top: 1.2rem !important;
+            padding-left: 0.75rem !important;
+            padding-right: 0.75rem !important;
+            max-width: 100% !important;
+        }
+
+        .hero-box {
+            padding: 18px !important;
+            border-radius: 22px !important;
+            margin-bottom: 14px !important;
+        }
+
+        .hero-title {
+            font-size: 27px !important;
+            line-height: 1.12 !important;
+        }
+
+        .hero-subtitle {
+            font-size: 14px !important;
+            line-height: 1.35 !important;
+        }
+
+        h1 { font-size: 28px !important; }
+        h2 { font-size: 23px !important; }
+        h3 { font-size: 20px !important; }
+
+        div[data-testid="stMetric"] {
+            padding: 14px !important;
+            border-radius: 18px !important;
+            margin-bottom: 8px !important;
+        }
+
+        div[data-testid="column"] {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+            min-width: 100% !important;
+        }
+
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            padding: 12px !important;
+            border-radius: 20px !important;
+            margin-bottom: 16px !important;
+        }
+
+        .mini-title {
+            font-size: 18px !important;
+            min-height: auto !important;
+        }
+
+        .detail-box {
+            padding: 14px !important;
+            border-radius: 22px !important;
+        }
+
+        .detail-title {
+            font-size: 25px !important;
+            line-height: 1.15 !important;
+        }
+
+        .detail-subtitle {
+            font-size: 14px !important;
+        }
+
+        .empty-photo {
+            height: 280px !important;
+        }
+
+        .stButton button,
+        div[data-testid="stLinkButton"] a {
+            min-height: 44px !important;
+            font-size: 15px !important;
+        }
+    }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -297,7 +372,7 @@ def salvar(nome, marca, serie, raridade, status, valor_pago, foto, link_compra="
         link_compra = normalizar_texto(link_compra)
         link_salvar = normalizar_link_ml(link_compra) if link_compra else ""
 
-        supabase.table("minis").insert({
+        resposta = supabase.table("minis").insert({
             "nome": normalizar_texto(nome),
             "marca": normalizar_texto(marca),
             "serie": normalizar_texto(serie),
@@ -311,6 +386,9 @@ def salvar(nome, marca, serie, raridade, status, valor_pago, foto, link_compra="
             "observacoes": normalizar_texto(observacoes),
             "atualizado_em": datetime.now().isoformat()
         }).execute()
+
+        if resposta.data and resposta.data[0].get("id"):
+            registrar_historico_valor(resposta.data[0]["id"], valor_pago, preco_atual)
     except Exception as e:
         st.error(f"Erro ao salvar mini no Supabase: {e}")
 
@@ -356,9 +434,80 @@ def atualizar_dados_extra(id_mini, valor_pago, link_compra, preco_atual, observa
             "observacoes": normalizar_texto(observacoes),
             "atualizado_em": datetime.now().isoformat()
         }).eq("id", id_mini).execute()
+
+        registrar_historico_valor(id_mini, valor_pago, preco_atual)
     except Exception as e:
         st.error(f"Erro ao atualizar dados extras: {e}")
 
+
+
+
+def registrar_historico_valor(id_mini, valor_pago, preco_atual):
+    """
+    Registra automaticamente um ponto de histórico.
+    Se a tabela historico_valores ainda não existir, o app não quebra.
+    """
+    try:
+        valor_pago_float = float(valor_pago or 0)
+        preco_atual_float = float(preco_atual or 0)
+
+        supabase.table("historico_valores").insert({
+            "mini_id": id_mini,
+            "valor_pago": valor_pago_float,
+            "preco_atual": preco_atual_float,
+            "valorizacao": preco_atual_float - valor_pago_float
+        }).execute()
+    except Exception:
+        # Mantém o app funcionando mesmo se a tabela ainda não tiver sido criada.
+        pass
+
+
+def obter_historico_valores(id_mini):
+    try:
+        resposta = (
+            supabase.table("historico_valores")
+            .select("*")
+            .eq("mini_id", id_mini)
+            .order("criado_em", desc=False)
+            .execute()
+        )
+        return resposta.data or []
+    except Exception:
+        return []
+
+
+def exibir_grafico_historico(id_mini):
+    historico = obter_historico_valores(id_mini)
+
+    if not historico:
+        st.info("Ainda não há histórico de valores para essa mini. Ao salvar alterações de preço, o histórico começa a ser criado automaticamente.")
+        return
+
+    df_hist = pd.DataFrame(historico)
+
+    if df_hist.empty or "criado_em" not in df_hist.columns:
+        st.info("Histórico ainda sem dados suficientes para gráfico.")
+        return
+
+    df_hist["criado_em"] = pd.to_datetime(df_hist["criado_em"], errors="coerce")
+    df_hist = df_hist.dropna(subset=["criado_em"]).sort_values("criado_em")
+
+    for col in ["valor_pago", "preco_atual", "valorizacao"]:
+        if col in df_hist.columns:
+            df_hist[col] = pd.to_numeric(df_hist[col], errors="coerce").fillna(0)
+
+    if df_hist.empty:
+        st.info("Histórico ainda sem dados suficientes para gráfico.")
+        return
+
+    grafico = df_hist.set_index("criado_em")[["preco_atual", "valorizacao"]]
+    st.line_chart(grafico, use_container_width=True)
+
+    ultimo = df_hist.iloc[-1]
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Último valor pago", dinheiro(ultimo.get("valor_pago", 0)))
+    c2.metric("Último preço atual", dinheiro(ultimo.get("preco_atual", 0)))
+    c3.metric("Última valorização", dinheiro(ultimo.get("valorizacao", 0)))
 
 
 def listar():
@@ -516,6 +665,10 @@ def classe_badge(raridade):
 
 
 def exibir_carrossel(fotos, id_mini, altura=300):
+    """
+    Carrossel leve, sem components.html.
+    Evita loop/travamento no Streamlit Cloud e fica melhor no celular.
+    """
     imagens = []
 
     for foto in fotos:
@@ -524,160 +677,54 @@ def exibir_carrossel(fotos, id_mini, altura=300):
             imagens.append(src)
 
     if not imagens:
-        st.markdown(f'<div class="empty-photo" style="height:{altura}px;">🚗 Sem foto</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="empty-photo" style="height:{altura}px;">🚗 Sem foto</div>',
+            unsafe_allow_html=True
+        )
         return
 
-    safe_id = f"mini_{str(id_mini).replace('-', '_').replace(' ', '_')}"
+    safe_id = f"carousel_{str(id_mini).replace('-', '_').replace(' ', '_')}"
+    chave_idx = f"{safe_id}_idx"
 
-    slides_html = ""
-    dots_html = ""
+    if chave_idx not in st.session_state:
+        st.session_state[chave_idx] = 0
 
-    for i, img in enumerate(imagens):
-        active = "active" if i == 0 else ""
-        slides_html += f'<img class="slide_{safe_id} {active}" src="{html.escape(img)}">'
-        dots_html += f'<span class="dot_{safe_id} {active}" onclick="mostrar_{safe_id}({i})"></span>'
+    total = len(imagens)
 
-    setas = ""
-    if len(imagens) > 1:
-        setas = f"""
-        <button class="nav_{safe_id} prev_{safe_id}" onclick="mover_{safe_id}(-1)">❮</button>
-        <button class="nav_{safe_id} next_{safe_id}" onclick="mover_{safe_id}(1)">❯</button>
-        """
+    if st.session_state[chave_idx] >= total:
+        st.session_state[chave_idx] = 0
 
-    components.html(f"""
-    <div class="carousel_{safe_id}">
-        {slides_html}
-        {setas}
-        <div class="counter_{safe_id}">
-            <span id="counter_{safe_id}">1</span>/{len(imagens)}
-        </div>
-        <div class="dots_{safe_id}">
-            {dots_html}
-        </div>
-    </div>
+    indice = st.session_state[chave_idx]
 
-    <style>
-        .carousel_{safe_id} {{
-            position: relative;
-            width: 100%;
-            height: {altura}px;
-            background:
-                radial-gradient(circle at top, rgba(56,189,248,0.14), transparent 42%),
-                #020617;
-            border-radius: 20px;
-            overflow: hidden;
-            border: 1px solid #334155;
-        }}
+    st.image(
+        imagens[indice],
+        use_container_width=True
+    )
 
-        .slide_{safe_id} {{
-            display: none;
-            width: 100%;
-            height: {altura}px;
-            object-fit: contain;
-            background: transparent;
-            padding: 8px;
-            box-sizing: border-box;
-        }}
+    if total > 1:
+        c1, c2, c3 = st.columns([1, 2, 1])
 
-        .slide_{safe_id}.active {{
-            display: block;
-            animation: fade_{safe_id} .25s ease-in-out;
-        }}
+        with c1:
+            if st.button("◀", key=f"{safe_id}_prev", use_container_width=True):
+                st.session_state[chave_idx] = (st.session_state[chave_idx] - 1) % total
+                st.rerun()
 
-        @keyframes fade_{safe_id} {{
-            from {{ opacity: .35; transform: scale(.985); }}
-            to {{ opacity: 1; transform: scale(1); }}
-        }}
+        with c2:
+            bolinhas = " ".join(["●" if i == indice else "○" for i in range(total)])
+            st.markdown(
+                f"""
+                <div style="text-align:center; color:#38BDF8; font-size:18px; font-weight:900;">
+                    {bolinhas}<br>
+                    <span style="font-size:12px; color:#CBD5E1;">{indice + 1}/{total}</span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
-        .dots_{safe_id} {{
-            position: absolute;
-            bottom: 12px;
-            left: 0;
-            right: 0;
-            text-align: center;
-            z-index: 10;
-        }}
-
-        .dot_{safe_id} {{
-            height: 10px;
-            width: 10px;
-            margin: 0 4px;
-            background-color: rgba(148, 163, 184, 0.55);
-            border-radius: 50%;
-            display: inline-block;
-            cursor: pointer;
-            transition: all 0.25s ease;
-            border: 1px solid rgba(255,255,255,.75);
-        }}
-
-        .dot_{safe_id}.active {{
-            background-color: #38BDF8;
-            transform: scale(1.45);
-            box-shadow: 0 0 12px rgba(56,189,248,0.9);
-        }}
-
-        .nav_{safe_id} {{
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
-            z-index: 15;
-            border: 1px solid rgba(255,255,255,.25);
-            background: rgba(2,6,23,.70);
-            color: white;
-            width: 34px;
-            height: 44px;
-            border-radius: 14px;
-            cursor: pointer;
-            font-size: 22px;
-            font-weight: 900;
-            backdrop-filter: blur(8px);
-        }}
-
-        .nav_{safe_id}:hover {{ background: rgba(56,189,248,.85); }}
-        .prev_{safe_id} {{ left: 10px; }}
-        .next_{safe_id} {{ right: 10px; }}
-
-        .counter_{safe_id} {{
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            padding: 5px 10px;
-            border-radius: 999px;
-            background: rgba(2,6,23,.72);
-            color: #E2E8F0;
-            font-size: 12px;
-            font-weight: 800;
-            border: 1px solid rgba(255,255,255,.18);
-        }}
-    </style>
-
-    <script>
-        let atual_{safe_id} = 0;
-
-        function mostrar_{safe_id}(index) {{
-            const slides = document.querySelectorAll(".slide_{safe_id}");
-            const dots = document.querySelectorAll(".dot_{safe_id}");
-            const counter = document.getElementById("counter_{safe_id}");
-
-            if (index < 0) index = slides.length - 1;
-            if (index >= slides.length) index = 0;
-
-            atual_{safe_id} = index;
-
-            slides.forEach(slide => slide.classList.remove("active"));
-            dots.forEach(dot => dot.classList.remove("active"));
-
-            slides[index].classList.add("active");
-            dots[index].classList.add("active");
-
-            if (counter) counter.innerText = index + 1;
-        }}
-
-        function mover_{safe_id}(direcao) {{
-            mostrar_{safe_id}(atual_{safe_id} + direcao);
-        }}
-    </script>
-    """, height=altura + 20)
+        with c3:
+            if st.button("▶", key=f"{safe_id}_next", use_container_width=True):
+                st.session_state[chave_idx] = (st.session_state[chave_idx] + 1) % total
+                st.rerun()
 
 
 # =========================================================
@@ -704,10 +751,10 @@ admin_logado = senha_digitada == st.secrets.get("ADMIN_PASSWORD", "")
 
 if admin_logado:
     st.sidebar.success("Modo administrador ativo 🔥")
-    opcoes_menu = ["Cadastrar", "Ver coleção", "Adicionar fotos", "Importar Excel"]
+    opcoes_menu = ["Dashboard", "Cadastrar", "Ver coleção", "Adicionar fotos", "Importar Excel"]
 else:
     st.sidebar.info("Modo visitante: somente visualização")
-    opcoes_menu = ["Ver coleção"]
+    opcoes_menu = ["Dashboard", "Ver coleção"]
 
 menu = st.sidebar.radio("Menu", opcoes_menu)
 
@@ -718,6 +765,57 @@ if st.session_state.ml_feedback:
     else:
         st.warning(mensagem)
     st.session_state.ml_feedback = None
+
+
+
+if menu == "Dashboard":
+    st.header("Dashboard da coleção")
+
+    minis = listar()
+
+    if not minis:
+        st.info("Ainda não há minis cadastradas.")
+    else:
+        total_minis = len(minis)
+        valor_total = sum([m[6] for m in minis if m[6]])
+        preco_total = sum([m[10] for m in minis if m[10]])
+        valorizacao_total = preco_total - valor_total
+        favoritos_total = len([m for m in minis if m[8]])
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("🚗 Total de minis", total_minis)
+        c2.metric("💰 Total pago", dinheiro(valor_total))
+        c3.metric("📈 Valor atual", dinheiro(preco_total))
+        c4.metric("🔥 Valorização", dinheiro(valorizacao_total))
+
+        df_dash = pd.DataFrame(minis, columns=[
+            "id", "nome", "marca", "serie", "raridade", "status", "valor_pago", "foto",
+            "favorito", "link_compra", "preco_atual", "observacoes", "atualizado_em"
+        ])
+
+        df_dash["valor_pago"] = pd.to_numeric(df_dash["valor_pago"], errors="coerce").fillna(0)
+        df_dash["preco_atual"] = pd.to_numeric(df_dash["preco_atual"], errors="coerce").fillna(0)
+        df_dash["valorizacao"] = df_dash["preco_atual"] - df_dash["valor_pago"]
+
+        st.markdown("### 🏆 Top valorização")
+        top_val = df_dash.sort_values("valorizacao", ascending=False).head(10)[
+            ["nome", "marca", "raridade", "valor_pago", "preco_atual", "valorizacao"]
+        ]
+        st.dataframe(top_val, use_container_width=True, hide_index=True)
+
+        st.markdown("### 📊 Valor atual por marca")
+        por_marca = (
+            df_dash.groupby("marca", dropna=False)["preco_atual"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(12)
+        )
+        st.bar_chart(por_marca, use_container_width=True)
+
+        st.markdown("### ⭐ Quantidade por raridade")
+        por_raridade = df_dash["raridade"].fillna("Sem raridade").value_counts()
+        st.bar_chart(por_raridade, use_container_width=True)
+
 
 
 if menu == "Cadastrar" and admin_logado:
@@ -867,6 +965,9 @@ if menu == "Ver coleção":
                 if observacoes:
                     st.markdown("### 📝 Observações")
                     st.write(observacoes)
+
+            st.markdown("### 📈 Histórico de valorização")
+            exibir_grafico_historico(id_mini)
 
             st.markdown('</div>', unsafe_allow_html=True)
 
