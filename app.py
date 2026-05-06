@@ -232,6 +232,51 @@ st.markdown("""
         border-radius: 14px;
     }
 
+
+    /* ================= CARDS / FOTOS PADRONIZADAS ================= */
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.mini-card-anchor) {
+        min-height: 705px;
+    }
+
+    .carousel-frame {
+        width: 100%;
+        height: var(--carousel-height);
+        border-radius: 18px;
+        overflow: hidden;
+        border: 1px solid #334155;
+        background:
+            radial-gradient(circle at top, rgba(56,189,248,0.10), transparent 42%),
+            #020617;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+    }
+
+    .carousel-frame img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+        background: #FFFFFF;
+        border-radius: 14px;
+    }
+
+    .carousel-dots {
+        text-align: center;
+        color: #38BDF8;
+        font-size: 18px;
+        font-weight: 900;
+        line-height: 1.2;
+        min-height: 34px;
+    }
+
+    .carousel-count {
+        font-size: 12px;
+        color: #CBD5E1;
+        font-weight: 800;
+    }
+
     /* ================= MOBILE PREMIUM ================= */
     @media (max-width: 768px) {
         .block-container {
@@ -277,6 +322,14 @@ st.markdown("""
             padding: 12px !important;
             border-radius: 20px !important;
             margin-bottom: 16px !important;
+        }
+
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.mini-card-anchor) {
+            min-height: auto !important;
+        }
+
+        .carousel-frame {
+            height: 280px !important;
         }
 
         .mini-title {
@@ -666,8 +719,11 @@ def classe_badge(raridade):
 
 def exibir_carrossel(fotos, id_mini, altura=300):
     """
-    Carrossel leve, sem components.html.
-    Evita loop/travamento no Streamlit Cloud e fica melhor no celular.
+    Carrossel leve e estável:
+    - sem components.html
+    - fotos sempre dentro de uma área fixa
+    - não deixa o card crescer/encolher conforme a proporção da imagem
+    - melhor para celular e Streamlit Cloud
     """
     imagens = []
 
@@ -695,14 +751,19 @@ def exibir_carrossel(fotos, id_mini, altura=300):
         st.session_state[chave_idx] = 0
 
     indice = st.session_state[chave_idx]
+    imagem_atual = html.escape(imagens[indice], quote=True)
 
-    st.image(
-        imagens[indice],
-        use_container_width=True
+    st.markdown(
+        f"""
+        <div class="carousel-frame" style="--carousel-height:{altura}px;">
+            <img src="{imagem_atual}" alt="Foto da mini">
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
     if total > 1:
-        c1, c2, c3 = st.columns([1, 2, 1])
+        c1, c2, c3 = st.columns([1, 2.2, 1])
 
         with c1:
             if st.button("◀", key=f"{safe_id}_prev", use_container_width=True):
@@ -713,9 +774,9 @@ def exibir_carrossel(fotos, id_mini, altura=300):
             bolinhas = " ".join(["●" if i == indice else "○" for i in range(total)])
             st.markdown(
                 f"""
-                <div style="text-align:center; color:#38BDF8; font-size:18px; font-weight:900;">
+                <div class="carousel-dots">
                     {bolinhas}<br>
-                    <span style="font-size:12px; color:#CBD5E1;">{indice + 1}/{total}</span>
+                    <span class="carousel-count">{indice + 1}/{total}</span>
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -725,6 +786,16 @@ def exibir_carrossel(fotos, id_mini, altura=300):
             if st.button("▶", key=f"{safe_id}_next", use_container_width=True):
                 st.session_state[chave_idx] = (st.session_state[chave_idx] + 1) % total
                 st.rerun()
+    else:
+        st.markdown(
+            """
+            <div class="carousel-dots">
+                ●<br><span class="carousel-count">1/1</span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
 
 
 # =========================================================
@@ -1090,6 +1161,7 @@ if menu == "Ver coleção":
 
                     with coluna:
                         with st.container(border=True):
+                            st.markdown('<div class="mini-card-anchor"></div>', unsafe_allow_html=True)
                             exibir_carrossel(fotos_validas, id_mini)
 
                             st.markdown(
