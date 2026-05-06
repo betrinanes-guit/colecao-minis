@@ -233,6 +233,99 @@ st.markdown("""
     }
 
 
+    .dash-card {
+        background: linear-gradient(145deg, rgba(15,23,42,0.98), rgba(2,6,23,0.98));
+        border: 1px solid #334155;
+        border-radius: 24px;
+        padding: 18px;
+        box-shadow: 0 16px 45px rgba(0,0,0,0.35);
+        margin-bottom: 18px;
+    }
+
+    .dash-title {
+        font-size: 22px;
+        font-weight: 900;
+        color: #FFFFFF;
+        margin-bottom: 14px;
+    }
+
+    .dash-row { margin: 12px 0 16px 0; }
+
+    .dash-row-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 6px;
+        color: #E2E8F0;
+        font-size: 14px;
+        font-weight: 800;
+    }
+
+    .dash-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .dash-value {
+        color: #38BDF8;
+        white-space: nowrap;
+        font-weight: 900;
+    }
+
+    .dash-bar-bg {
+        height: 14px;
+        background: rgba(15,23,42,0.95);
+        border: 1px solid rgba(51,65,85,0.95);
+        border-radius: 999px;
+        overflow: hidden;
+    }
+
+    .dash-bar-fill {
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #0284C7, #38BDF8);
+        box-shadow: 0 0 14px rgba(56,189,248,0.45);
+    }
+
+    .dash-table-wrap { overflow-x: auto; }
+
+    .dash-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0 8px;
+        min-width: 720px;
+    }
+
+    .dash-table th {
+        color: #94A3B8;
+        font-size: 12px;
+        text-align: left;
+        padding: 6px 8px;
+    }
+
+    .dash-table td {
+        background: rgba(15,23,42,0.72);
+        border-top: 1px solid #334155;
+        border-bottom: 1px solid #334155;
+        color: #E2E8F0;
+        padding: 10px 8px;
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .dash-table td:first-child {
+        border-left: 1px solid #334155;
+        border-radius: 14px 0 0 14px;
+    }
+
+    .dash-table td:last-child {
+        border-right: 1px solid #334155;
+        border-radius: 0 14px 14px 0;
+    }
+
+
     /* ================= CARDS / FOTOS PADRONIZADAS ================= */
     div[data-testid="stVerticalBlockBorderWrapper"]:has(.mini-card-anchor) {
         min-height: 705px;
@@ -717,6 +810,108 @@ def classe_badge(raridade):
     return "badge-comum"
 
 
+
+def render_bar_list(titulo, serie, formato="dinheiro"):
+    """Renderiza ranking com barras em HTML, mais limpo que st.bar_chart para poucos dados."""
+    if serie is None or len(serie) == 0:
+        st.info("Sem dados suficientes para exibir este bloco.")
+        return
+
+    try:
+        serie = serie.fillna(0)
+    except Exception:
+        pass
+
+    valores = [float(v or 0) for v in serie.values]
+    max_valor = max(valores) if valores else 0
+    itens = []
+
+    for label, valor in serie.items():
+        valor_float = float(valor or 0)
+        largura = 0 if max_valor <= 0 else max(6, int((valor_float / max_valor) * 100))
+
+        if formato == "dinheiro":
+            valor_txt = dinheiro(valor_float)
+        elif formato == "inteiro":
+            valor_txt = str(int(valor_float))
+        else:
+            valor_txt = str(valor_float)
+
+        itens.append(f"""
+        <div class="dash-row">
+            <div class="dash-row-top">
+                <div class="dash-label">{html.escape(str(label or 'Sem informação'))}</div>
+                <div class="dash-value">{html.escape(valor_txt)}</div>
+            </div>
+            <div class="dash-bar-bg">
+                <div class="dash-bar-fill" style="width:{largura}%;"></div>
+            </div>
+        </div>
+        """)
+
+    st.markdown(
+        f"""
+        <div class="dash-card">
+            <div class="dash-title">{html.escape(titulo)}</div>
+            {''.join(itens)}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+def render_top_valorizacao(df_dash):
+    if df_dash.empty:
+        st.info("Sem dados para ranking.")
+        return
+
+    top = df_dash.sort_values("valorizacao", ascending=False).head(10)
+    linhas = ""
+
+    for _, row in top.iterrows():
+        nome = html.escape(str(row.get("nome", "-")))
+        marca = html.escape(str(row.get("marca", "-")))
+        raridade = html.escape(str(row.get("raridade", "-")))
+        pago = dinheiro(row.get("valor_pago", 0))
+        atual = dinheiro(row.get("preco_atual", 0))
+        val = dinheiro(row.get("valorizacao", 0))
+
+        linhas += f"""
+        <tr>
+            <td>{nome}</td>
+            <td>{marca}</td>
+            <td>{raridade}</td>
+            <td>{pago}</td>
+            <td>{atual}</td>
+            <td class="dash-value">{val}</td>
+        </tr>
+        """
+
+    st.markdown(
+        f"""
+        <div class="dash-card">
+            <div class="dash-title">🏆 Top valorização</div>
+            <div class="dash-table-wrap">
+                <table class="dash-table">
+                    <thead>
+                        <tr>
+                            <th>Mini</th>
+                            <th>Marca</th>
+                            <th>Raridade</th>
+                            <th>Pago</th>
+                            <th>Atual</th>
+                            <th>Ganho</th>
+                        </tr>
+                    </thead>
+                    <tbody>{linhas}</tbody>
+                </table>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
 def exibir_carrossel(fotos, id_mini, altura=300):
     """
     Carrossel leve e estável:
@@ -851,7 +1046,6 @@ if menu == "Dashboard":
         valor_total = sum([m[6] for m in minis if m[6]])
         preco_total = sum([m[10] for m in minis if m[10]])
         valorizacao_total = preco_total - valor_total
-        favoritos_total = len([m for m in minis if m[8]])
 
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("🚗 Total de minis", total_minis)
@@ -864,28 +1058,28 @@ if menu == "Dashboard":
             "favorito", "link_compra", "preco_atual", "observacoes", "atualizado_em"
         ])
 
+        df_dash["marca"] = df_dash["marca"].replace("", "Sem marca").fillna("Sem marca")
+        df_dash["raridade"] = df_dash["raridade"].replace("", "Sem raridade").fillna("Sem raridade")
         df_dash["valor_pago"] = pd.to_numeric(df_dash["valor_pago"], errors="coerce").fillna(0)
         df_dash["preco_atual"] = pd.to_numeric(df_dash["preco_atual"], errors="coerce").fillna(0)
         df_dash["valorizacao"] = df_dash["preco_atual"] - df_dash["valor_pago"]
 
-        st.markdown("### 🏆 Top valorização")
-        top_val = df_dash.sort_values("valorizacao", ascending=False).head(10)[
-            ["nome", "marca", "raridade", "valor_pago", "preco_atual", "valorizacao"]
-        ]
-        st.dataframe(top_val, use_container_width=True, hide_index=True)
+        render_top_valorizacao(df_dash)
 
-        st.markdown("### 📊 Valor atual por marca")
-        por_marca = (
-            df_dash.groupby("marca", dropna=False)["preco_atual"]
-            .sum()
-            .sort_values(ascending=False)
-            .head(12)
-        )
-        st.bar_chart(por_marca, use_container_width=True)
+        col_dash1, col_dash2 = st.columns(2)
 
-        st.markdown("### ⭐ Quantidade por raridade")
-        por_raridade = df_dash["raridade"].fillna("Sem raridade").value_counts()
-        st.bar_chart(por_raridade, use_container_width=True)
+        with col_dash1:
+            por_marca = (
+                df_dash.groupby("marca", dropna=False)["preco_atual"]
+                .sum()
+                .sort_values(ascending=False)
+                .head(10)
+            )
+            render_bar_list("📊 Valor atual por marca", por_marca, formato="dinheiro")
+
+        with col_dash2:
+            por_raridade = df_dash["raridade"].value_counts().head(10)
+            render_bar_list("⭐ Quantidade por raridade", por_raridade, formato="inteiro")
 
 
 
