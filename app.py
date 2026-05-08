@@ -966,12 +966,41 @@ def render_elite_chip(nome, marca, serie, raridade):
     score = calcular_score_mini(nome, marca, serie, raridade)
     categoria = categoria_elite(score)
     css = classe_elite_chip(score)
+
+    # =========================
+    # RARIDADE AUTOMÁTICA VISUAL
+    # =========================
+    # Importante: isso NÃO altera a raridade oficial gravada no Supabase.
+    # TH / STH / RLC / Chase continuam sendo raridades reais e manuais.
+    raridade_auto = "🚗 Comum"
+
+    if score >= 70:
+        raridade_auto = "🏆 Lendária"
+    elif score >= 51:
+        raridade_auto = "💎 Elite"
+    elif score >= 31:
+        raridade_auto = "🔥 Premium"
+    elif score >= 16:
+        raridade_auto = "⭐ Especial"
+
     st.markdown(
-        f'<div class="elite-chip {css}">{categoria} • SCORE {score}</div>',
+        f'''        <div class="elite-chip {css}">
+            {categoria} • SCORE {score}
+        </div>
+
+        <div style="
+            margin-top:-2px;
+            margin-bottom:12px;
+            font-size:13px;
+            font-weight:800;
+            color:#CBD5E1;
+        ">
+            🎖️ Auto Rank: {raridade_auto}
+        </div>
+        ''',
         unsafe_allow_html=True
     )
     return score, categoria
-
 
 
 def render_bar_list(titulo, serie, formato="dinheiro"):
