@@ -384,6 +384,28 @@ st.markdown("""
     }
 
 
+
+
+    .elite-chip {
+        display: inline-block;
+        margin-top: 4px;
+        margin-bottom: 10px;
+        padding: 5px 11px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 900;
+        color: #E0F2FE;
+        background: linear-gradient(135deg, rgba(14,165,233,0.22), rgba(168,85,247,0.18));
+        border: 1px solid rgba(56,189,248,0.45);
+        letter-spacing: .35px;
+        box-shadow: 0 0 18px rgba(56,189,248,0.10);
+    }
+
+    .elite-chip-elite { color: #FDE68A; border-color: rgba(250,204,21,0.70); background: rgba(250,204,21,0.12); }
+    .elite-chip-hype { color: #F9A8D4; border-color: rgba(244,114,182,0.70); background: rgba(244,114,182,0.12); }
+    .elite-chip-jdm { color: #93C5FD; border-color: rgba(59,130,246,0.70); background: rgba(59,130,246,0.12); }
+    .elite-chip-street { color: #CBD5E1; border-color: rgba(148,163,184,0.45); background: rgba(148,163,184,0.10); }
+
     /* ================= EDITOR NO CARD ================= */
     div[data-testid="stExpander"] {
         border: 1px solid rgba(56,189,248,0.28) !important;
@@ -871,6 +893,86 @@ def classe_badge(raridade):
     return "badge-comum"
 
 
+# =========================================================
+# SCORE / ELITE SYSTEM
+# =========================================================
+
+def calcular_score_mini(nome, marca, serie, raridade):
+    score = 0
+    texto = f"{nome} {marca} {serie} {raridade}".lower()
+
+    # Raridades reais / fortes
+    if "sth" in texto or "super treasure" in texto:
+        score += 70
+    if "chase" in texto:
+        score += 60
+    if "rlc" in texto or "red line club" in texto:
+        score += 50
+    if "premium" in texto:
+        score += 15
+    if "especial" in texto:
+        score += 10
+    if texto.strip().endswith("th") or " treasure hunt" in texto:
+        score += 25
+
+    # Modelos e temas fortes de coleção
+    if "ferrari" in texto:
+        score += 30
+    if "f40" in texto:
+        score += 22
+    if "skyline" in texto or "gt-r" in texto or "gtr" in texto:
+        score += 25
+    if "lbwk" in texto or "liberty walk" in texto:
+        score += 20
+    if "pagani" in texto:
+        score += 18
+    if "lancer" in texto or "evolution" in texto or "evo" in texto:
+        score += 16
+    if "fairlady" in texto or "nissan" in texto:
+        score += 14
+    if "porsche" in texto:
+        score += 12
+    if "batmobile" in texto:
+        score += 14
+    if "vw" in texto or "volkswagen" in texto or "id. buzz" in texto:
+        score += 10
+    if "mustang" in texto or "camaro" in texto or "chevy" in texto or "challenger" in texto:
+        score += 8
+
+    return int(score)
+
+
+def categoria_elite(score):
+    if score >= 70:
+        return "💎 ELITE"
+    if score >= 45:
+        return "🔥 HYPE"
+    if score >= 25:
+        return "🏁 JDM"
+    return "🚗 STREET"
+
+
+def classe_elite_chip(score):
+    if score >= 70:
+        return "elite-chip-elite"
+    if score >= 45:
+        return "elite-chip-hype"
+    if score >= 25:
+        return "elite-chip-jdm"
+    return "elite-chip-street"
+
+
+def render_elite_chip(nome, marca, serie, raridade):
+    score = calcular_score_mini(nome, marca, serie, raridade)
+    categoria = categoria_elite(score)
+    css = classe_elite_chip(score)
+    st.markdown(
+        f'<div class="elite-chip {css}">{categoria} • SCORE {score}</div>',
+        unsafe_allow_html=True
+    )
+    return score, categoria
+
+
 
 def render_bar_list(titulo, serie, formato="dinheiro"):
     """Renderiza ranking com barras em HTML, mais limpo que st.bar_chart para poucos dados."""
@@ -1114,6 +1216,36 @@ if menu == "Dashboard":
         c3.metric("📈 Valor atual", dinheiro(preco_total))
         c4.metric("🔥 Valorização", dinheiro(valorizacao_total))
 
+        ranking_elite = []
+        for mini in minis:
+            score = calcular_score_mini(mini[1], mini[2], mini[3], mini[4])
+            ranking_elite.append({
+                "Mini": mini[1],
+                "Marca": mini[2],
+                "Raridade": mini[4],
+                "Categoria": categoria_elite(score),
+                "Score": score,
+            })
+
+        df_rank_elite = pd.DataFrame(ranking_elite).sort_values("Score", ascending=False)
+        score_total = int(df_rank_elite["Score"].sum()) if not df_rank_elite.empty else 0
+        elite_total = int((df_rank_elite["Score"] >= 70).sum()) if not df_rank_elite.empty else 0
+        hype_total = int(((df_rank_elite["Score"] >= 45) & (df_rank_elite["Score"] < 70)).sum()) if not df_rank_elite.empty else 0
+        jdm_total = int(df_rank_elite["Categoria"].astype(str).str.contains("JDM", na=False).sum()) if not df_rank_elite.empty else 0
+
+        e1, e2, e3, e4 = st.columns(4)
+        e1.metric("🏆 Elite Score", score_total)
+        e2.metric("💎 Minis Elite", elite_total)
+        e3.metric("🔥 Hype", hype_total)
+        e4.metric("🏁 JDM Score", jdm_total)
+
+        st.markdown("### 🏆 Ranking Elite da Garagem")
+        st.dataframe(
+            df_rank_elite.head(15),
+            use_container_width=True,
+            hide_index=True
+        )
+
         df_dash = pd.DataFrame(minis, columns=[
             "id", "nome", "marca", "serie", "raridade", "status", "valor_pago", "foto",
             "favorito", "link_compra", "preco_atual", "observacoes", "atualizado_em"
@@ -1260,6 +1392,7 @@ if menu == "Ver coleção":
                     f'<div class="badge {badge_css}">{html.escape(str(raridade or "Comum"))}</div>',
                     unsafe_allow_html=True
                 )
+                render_elite_chip(nome, marca, serie, raridade)
 
                 m1, m2 = st.columns(2)
                 m1.metric("💰 Valor pago", dinheiro(valor))
@@ -1552,6 +1685,7 @@ if menu == "Ver coleção":
                                 f'<div class="badge {badge_css}">{html.escape(str(raridade or "Comum"))}</div>',
                                 unsafe_allow_html=True
                             )
+                            render_elite_chip(nome, marca, serie, raridade)
                             st.markdown(
                                 f'<div class="mini-title">{"💛 " if favorito else ""}{html.escape(str(nome or ""))}</div>',
                                 unsafe_allow_html=True
