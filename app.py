@@ -1004,9 +1004,8 @@ def render_elite_chip(nome, marca, serie, raridade):
 
 
 def render_bar_list(titulo, serie, formato="dinheiro"):
-    """Renderiza ranking com barras em HTML, mais limpo que st.bar_chart para poucos dados."""
     if serie is None or len(serie) == 0:
-        st.info("Sem dados suficientes para exibir este bloco.")
+        st.info("Sem dados suficientes.")
         return
 
     try:
@@ -1016,11 +1015,21 @@ def render_bar_list(titulo, serie, formato="dinheiro"):
 
     valores = [float(v or 0) for v in serie.values]
     max_valor = max(valores) if valores else 0
+    total = sum(valores) if valores else 0
+
+    medalhas = ["🥇", "🥈", "🥉"]
     itens = []
 
-    for label, valor in serie.items():
+    for idx, (label, valor) in enumerate(serie.items()):
         valor_float = float(valor or 0)
-        largura = 0 if max_valor <= 0 else max(6, int((valor_float / max_valor) * 100))
+
+        largura = 0
+        if max_valor > 0:
+            largura = max(8, int((valor_float / max_valor) * 100))
+
+        percentual = 0
+        if total > 0:
+            percentual = round((valor_float / total) * 100, 1)
 
         if formato == "dinheiro":
             valor_txt = dinheiro(valor_float)
@@ -1029,22 +1038,93 @@ def render_bar_list(titulo, serie, formato="dinheiro"):
         else:
             valor_txt = str(valor_float)
 
+        medalha = medalhas[idx] if idx < 3 else "🏎️"
+
         itens.append(f"""
-        <div class="dash-row">
-            <div class="dash-row-top">
-                <div class="dash-label">{html.escape(str(label or 'Sem informação'))}</div>
-                <div class="dash-value">{html.escape(valor_txt)}</div>
+        <div style="
+            margin-bottom:18px;
+            background:rgba(15,23,42,0.45);
+            border:1px solid rgba(56,189,248,0.12);
+            border-radius:18px;
+            padding:14px;
+        ">
+            <div style="
+                display:flex;
+                justify-content:space-between;
+                align-items:center;
+                margin-bottom:8px;
+            ">
+                <div style="
+                    color:#F8FAFC;
+                    font-weight:900;
+                    font-size:14px;
+                    overflow:hidden;
+                    text-overflow:ellipsis;
+                    white-space:nowrap;
+                    padding-right:10px;
+                ">
+                    {medalha} {html.escape(str(label or 'Sem informação'))}
+                </div>
+
+                <div style="
+                    color:#38BDF8;
+                    font-weight:900;
+                    font-size:13px;
+                    white-space:nowrap;
+                ">
+                    {html.escape(valor_txt)}
+                </div>
             </div>
-            <div class="dash-bar-bg">
-                <div class="dash-bar-fill" style="width:{largura}%;"></div>
+
+            <div style="
+                width:100%;
+                height:16px;
+                background:#020617;
+                border-radius:999px;
+                overflow:hidden;
+                border:1px solid rgba(51,65,85,0.9);
+            ">
+                <div style="
+                    width:{largura}%;
+                    height:100%;
+                    border-radius:999px;
+                    background:linear-gradient(90deg, #0284C7, #38BDF8, #7DD3FC);
+                    box-shadow:0 0 18px rgba(56,189,248,0.45), 0 0 30px rgba(56,189,248,0.20);
+                "></div>
+            </div>
+
+            <div style="
+                margin-top:8px;
+                display:flex;
+                justify-content:flex-end;
+                color:#94A3B8;
+                font-size:12px;
+                font-weight:800;
+            ">
+                {percentual}%
             </div>
         </div>
         """)
 
     st.markdown(
         f"""
-        <div class="dash-card">
-            <div class="dash-title">{html.escape(titulo)}</div>
+        <div style="
+            background:linear-gradient(145deg, rgba(15,23,42,0.98), rgba(2,6,23,0.98));
+            border:1px solid #334155;
+            border-radius:26px;
+            padding:22px;
+            box-shadow:0 20px 50px rgba(0,0,0,0.38);
+            margin-bottom:20px;
+        ">
+            <div style="
+                font-size:24px;
+                font-weight:900;
+                color:#FFFFFF;
+                margin-bottom:18px;
+            ">
+                {html.escape(str(titulo))}
+            </div>
+
             {''.join(itens)}
         </div>
         """,
