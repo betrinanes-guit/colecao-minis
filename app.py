@@ -24,6 +24,19 @@ if "mini_detalhe_id" not in st.session_state:
 if "ml_feedback" not in st.session_state:
     st.session_state.ml_feedback = None
 
+
+def abrir_detalhe(id_mini):
+    """Abre a tela de detalhe de forma mais estável no Streamlit."""
+    try:
+        st.session_state["mini_detalhe_id"] = int(id_mini)
+    except Exception:
+        st.session_state["mini_detalhe_id"] = id_mini
+
+
+def voltar_colecao():
+    st.session_state["mini_detalhe_id"] = None
+
+
 BASE_DIR = Path(__file__).parent
 FOTOS_DIR = BASE_DIR / "fotos"
 FOTOS_DIR.mkdir(exist_ok=True)
@@ -370,6 +383,19 @@ st.markdown("""
         font-weight: 800;
     }
 
+
+    /* ================= EDITOR NO CARD ================= */
+    div[data-testid="stExpander"] {
+        border: 1px solid rgba(56,189,248,0.28) !important;
+        border-radius: 16px !important;
+        background: rgba(15,23,42,0.58) !important;
+    }
+
+    div[data-testid="stExpander"] summary {
+        font-weight: 900 !important;
+        color: #E2E8F0 !important;
+    }
+
     /* ================= MOBILE PREMIUM ================= */
     @media (max-width: 768px) {
         .block-container {
@@ -587,6 +613,41 @@ def atualizar_dados_extra(id_mini, valor_pago, link_compra, preco_atual, observa
 
 
 
+
+
+def atualizar_mini_completo(
+    id_mini,
+    nome,
+    marca,
+    serie,
+    raridade,
+    status,
+    valor_pago,
+    link_compra,
+    preco_atual,
+    observacoes
+):
+    try:
+        link_compra = normalizar_texto(link_compra)
+        link_salvar = normalizar_link_ml(link_compra) if link_compra else ""
+
+        supabase.table("minis").update({
+            "nome": normalizar_texto(nome),
+            "marca": normalizar_texto(marca),
+            "serie": normalizar_texto(serie),
+            "raridade": normalizar_texto(raridade),
+            "status": normalizar_texto(status),
+            "valor_pago": float(valor_pago or 0),
+            "link_compra": link_salvar,
+            "preco_atual": float(preco_atual or 0),
+            "observacoes": normalizar_texto(observacoes),
+            "atualizado_em": datetime.now().isoformat()
+        }).eq("id", id_mini).execute()
+
+        registrar_historico_valor(id_mini, valor_pago, preco_atual)
+
+    except Exception as e:
+        st.error(f"Erro ao atualizar mini: {e}")
 
 def registrar_historico_valor(id_mini, valor_pago, preco_atual):
     """
@@ -1150,8 +1211,7 @@ if menu == "Ver coleção":
 
         if not mini:
             st.warning("Mini não encontrada.")
-            if st.button("⬅ Voltar"):
-                st.session_state.mini_detalhe_id = None
+            if st.button("⬅ Voltar", on_click=voltar_colecao):
                 st.rerun()
         else:
             (
@@ -1167,8 +1227,7 @@ if menu == "Ver coleção":
             col_top1, col_top2, col_top3 = st.columns([1, 1, 1])
 
             with col_top1:
-                if st.button("⬅ Voltar para coleção", use_container_width=True):
-                    st.session_state.mini_detalhe_id = None
+                if st.button("⬅ Voltar para coleção", use_container_width=True, on_click=voltar_colecao):
                     st.rerun()
 
             with col_top2:
@@ -1237,10 +1296,30 @@ if menu == "Ver coleção":
             st.markdown('</div>', unsafe_allow_html=True)
 
             if admin_logado:
-                with st.expander("⚙️ Editar valores / link / observações"):
-                    col_val1, col_val2 = st.columns(2)
+                with st.expander("⚙️ Editar mini completo"):
+                    raridades_opcoes = ["Comum", "TH", "STH", "RLC", "Chase", "Premium", "Especial"]
+                    status_opcoes = ["Tenho", "Quero", "Repetido", "Vendido"]
 
-                    with col_val1:
+                    col_edit1, col_edit2 = st.columns(2)
+
+                    with col_edit1:
+                        novo_nome = st.text_input("Nome", value=nome or "")
+                        nova_marca = st.text_input("Marca", value=marca or "")
+                        nova_serie = st.text_input("Série", value=serie or "")
+
+                        nova_raridade = st.selectbox(
+                            "Raridade",
+                            raridades_opcoes,
+                            index=raridades_opcoes.index(raridade) if raridade in raridades_opcoes else 0
+                        )
+
+                    with col_edit2:
+                        novo_status = st.selectbox(
+                            "Status",
+                            status_opcoes,
+                            index=status_opcoes.index(status) if status in status_opcoes else 0
+                        )
+
                         novo_valor_pago = st.number_input(
                             "Valor pago",
                             min_value=0.0,
@@ -1248,7 +1327,6 @@ if menu == "Ver coleção":
                             value=float(valor or 0)
                         )
 
-                    with col_val2:
                         novo_preco = st.number_input(
                             "Preço atual",
                             min_value=0.0,
@@ -1263,9 +1341,23 @@ if menu == "Ver coleção":
                         st.caption(f"Link limpo detectado: {normalizar_link_ml(novo_link)}")
 
                     if st.button("Salvar alterações 🔥", use_container_width=True):
-                        atualizar_dados_extra(id_mini, novo_valor_pago, novo_link, novo_preco, nova_obs)
-                        st.success("Dados atualizados!")
-                        st.rerun()
+                        if not novo_nome.strip():
+                            st.warning("Informe pelo menos o nome da mini.")
+                        else:
+                            atualizar_mini_completo(
+                                id_mini,
+                                novo_nome,
+                                nova_marca,
+                                nova_serie,
+                                nova_raridade,
+                                novo_status,
+                                novo_valor_pago,
+                                novo_link,
+                                novo_preco,
+                                nova_obs
+                            )
+                            st.success("Mini atualizado com sucesso 🔥")
+                            st.rerun()
 
     else:
         st.header("Minha coleção")
@@ -1334,13 +1426,111 @@ if menu == "Ver coleção":
 
         st.write(f"Resultado: **{len(minis)}** mini(s)")
 
+        if minis and admin_logado:
+            st.markdown("### ✏️ Atalho rápido de edição")
+            opcoes_edicao = {
+                f"{m[1]} | {m[2]} | ID {m[0]}": m
+                for m in minis
+            }
+
+            mini_edicao_label = st.selectbox(
+                "Escolha uma mini para editar",
+                list(opcoes_edicao.keys()),
+                key="select_edicao_rapida"
+            )
+
+            mini_edicao = opcoes_edicao[mini_edicao_label]
+            (
+                edit_id, edit_nome, edit_marca, edit_serie, edit_raridade, edit_status,
+                edit_valor, edit_foto, edit_favorito, edit_link, edit_preco, edit_obs, edit_atualizado
+            ) = mini_edicao
+
+            with st.expander("Abrir editor desta mini", expanded=False):
+                raridades_opcoes = ["Comum", "TH", "STH", "RLC", "Chase", "Premium", "Especial"]
+                status_opcoes = ["Tenho", "Quero", "Repetido", "Vendido"]
+
+                col_e1, col_e2 = st.columns(2)
+
+                with col_e1:
+                    novo_nome_card = st.text_input("Nome", value=edit_nome or "", key=f"edit_nome_top_{edit_id}")
+                    nova_marca_card = st.text_input("Marca", value=edit_marca or "", key=f"edit_marca_top_{edit_id}")
+                    nova_serie_card = st.text_input("Série", value=edit_serie or "", key=f"edit_serie_top_{edit_id}")
+                    nova_raridade_card = st.selectbox(
+                        "Raridade",
+                        raridades_opcoes,
+                        index=raridades_opcoes.index(edit_raridade) if edit_raridade in raridades_opcoes else 0,
+                        key=f"edit_raridade_top_{edit_id}"
+                    )
+
+                with col_e2:
+                    novo_status_card = st.selectbox(
+                        "Status",
+                        status_opcoes,
+                        index=status_opcoes.index(edit_status) if edit_status in status_opcoes else 0,
+                        key=f"edit_status_top_{edit_id}"
+                    )
+                    novo_valor_card = st.number_input(
+                        "Valor pago",
+                        min_value=0.0,
+                        step=1.0,
+                        value=float(edit_valor or 0),
+                        key=f"edit_valor_top_{edit_id}"
+                    )
+                    novo_preco_card = st.number_input(
+                        "Preço atual",
+                        min_value=0.0,
+                        step=1.0,
+                        value=float(edit_preco or 0),
+                        key=f"edit_preco_top_{edit_id}"
+                    )
+
+                novo_link_card = st.text_input("Link de compra", value=edit_link or "", key=f"edit_link_top_{edit_id}")
+                nova_obs_card = st.text_area("Observações", value=edit_obs or "", key=f"edit_obs_top_{edit_id}")
+
+                if st.button("Salvar edição rápida 🔥", key=f"salvar_edit_top_{edit_id}", use_container_width=True):
+                    if not novo_nome_card.strip():
+                        st.warning("Informe pelo menos o nome da mini.")
+                    else:
+                        atualizar_mini_completo(
+                            edit_id,
+                            novo_nome_card,
+                            nova_marca_card,
+                            nova_serie_card,
+                            nova_raridade_card,
+                            novo_status_card,
+                            novo_valor_card,
+                            novo_link_card,
+                            novo_preco_card,
+                            nova_obs_card
+                        )
+                        st.success("Mini atualizada com sucesso 🔥")
+                        st.rerun()
+
+        if minis:
+            ITENS_POR_PAGINA = 9
+            total_paginas = max(1, (len(minis) + ITENS_POR_PAGINA - 1) // ITENS_POR_PAGINA)
+            pagina_atual = st.number_input(
+                "Página",
+                min_value=1,
+                max_value=total_paginas,
+                value=1,
+                step=1,
+                key="pagina_colecao"
+            )
+            inicio_pagina = (int(pagina_atual) - 1) * ITENS_POR_PAGINA
+            fim_pagina = inicio_pagina + ITENS_POR_PAGINA
+            minis_para_exibir = minis[inicio_pagina:fim_pagina]
+            st.caption(f"Exibindo {inicio_pagina + 1} a {min(fim_pagina, len(minis))} de {len(minis)} minis")
+        else:
+            minis_para_exibir = []
+
         if not minis:
             st.info("Nenhuma mini encontrada com esses filtros.")
         else:
             COLUNAS_POR_LINHA = 3
 
-            for linha_inicio in range(0, len(minis), COLUNAS_POR_LINHA):
-                linha = minis[linha_inicio:linha_inicio + COLUNAS_POR_LINHA]
+            for linha_inicio in range(0, len(minis_para_exibir), COLUNAS_POR_LINHA):
+                linha = minis_para_exibir[linha_inicio:linha_inicio + COLUNAS_POR_LINHA]
                 colunas = st.columns(COLUNAS_POR_LINHA)
 
                 for coluna, mini in zip(colunas, linha):
@@ -1397,9 +1587,72 @@ if menu == "Ver coleção":
                                     st.rerun()
 
                             with btn2:
-                                if st.button("🔍 Detalhes", key=f"det_{id_mini}", use_container_width=True):
-                                    st.session_state.mini_detalhe_id = id_mini
-                                    st.rerun()
+                                with st.expander("✏️ Editar mini"):
+                                    raridades_opcoes_card = ["Comum", "TH", "STH", "RLC", "Chase", "Premium", "Especial"]
+                                    status_opcoes_card = ["Tenho", "Quero", "Repetido", "Vendido"]
+
+                                    with st.form(key=f"form_card_{id_mini}"):
+                                        novo_nome_card2 = st.text_input(
+                                            "Nome",
+                                            value=nome or "",
+                                            key=f"card_nome_{id_mini}"
+                                        )
+
+                                        nova_raridade_card2 = st.selectbox(
+                                            "Raridade",
+                                            raridades_opcoes_card,
+                                            index=raridades_opcoes_card.index(raridade) if raridade in raridades_opcoes_card else 0,
+                                            key=f"card_raridade_{id_mini}"
+                                        )
+
+                                        novo_status_card2 = st.selectbox(
+                                            "Status",
+                                            status_opcoes_card,
+                                            index=status_opcoes_card.index(status) if status in status_opcoes_card else 0,
+                                            key=f"card_status_{id_mini}"
+                                        )
+
+                                        col_card_val1, col_card_val2 = st.columns(2)
+                                        with col_card_val1:
+                                            novo_valor_card2 = st.number_input(
+                                                "Pago",
+                                                min_value=0.0,
+                                                step=1.0,
+                                                value=float(valor or 0),
+                                                key=f"card_valor_{id_mini}"
+                                            )
+                                        with col_card_val2:
+                                            novo_preco_card2 = st.number_input(
+                                                "Atual",
+                                                min_value=0.0,
+                                                step=1.0,
+                                                value=float(preco_atual or 0),
+                                                key=f"card_preco_{id_mini}"
+                                            )
+
+                                        salvar_card = st.form_submit_button(
+                                            "Salvar 🔥",
+                                            use_container_width=True
+                                        )
+
+                                        if salvar_card:
+                                            if not novo_nome_card2.strip():
+                                                st.warning("Informe pelo menos o nome da mini.")
+                                            else:
+                                                atualizar_mini_completo(
+                                                    id_mini,
+                                                    novo_nome_card2,
+                                                    marca,
+                                                    serie,
+                                                    nova_raridade_card2,
+                                                    novo_status_card2,
+                                                    novo_valor_card2,
+                                                    link_compra,
+                                                    novo_preco_card2,
+                                                    observacoes
+                                                )
+                                                st.success("Mini atualizada 🔥")
+                                                st.rerun()
 
 
 if menu == "Adicionar fotos" and admin_logado:
