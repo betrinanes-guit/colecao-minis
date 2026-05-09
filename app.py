@@ -1272,20 +1272,31 @@ def render_donut_chart(df_chart, label_col, value_col, titulo, subtitulo=""):
 def render_hall_da_fama(df_rank_elite):
     with st.container(border=True):
         st.markdown("### 🏁 Hall da Fama")
-        st.caption("Os minis com maior força de coleção pelo Elite Score.")
+        st.caption("Favoritos entram primeiro. Depois vêm os maiores Elite Scores.")
 
         if df_rank_elite is None or df_rank_elite.empty:
             st.info("Sem dados para o Hall da Fama.")
             return
 
-        top = df_rank_elite.head(6)
-        for idx, row in top.iterrows():
-            medalha = "🥇" if idx == top.index[0] else "🥈" if idx == top.index[1] else "🥉" if idx == top.index[2] else "🏎️"
+        df_hall = df_rank_elite.copy()
+
+        if "Favorito_ord" not in df_hall.columns:
+            df_hall["Favorito_ord"] = df_hall.get("Favorito", "").astype(str).str.contains("Sim", na=False).astype(int)
+
+        df_hall = df_hall.sort_values(
+            ["Favorito_ord", "Score"],
+            ascending=[False, False]
+        ).head(6)
+
+        for pos, (_, row) in enumerate(df_hall.iterrows()):
+            medalha = "🥇" if pos == 0 else "🥈" if pos == 1 else "🥉" if pos == 2 else "🏎️"
+            favorito_tag = " • 👑 Escolha do Colecionador" if int(row.get("Favorito_ord", 0) or 0) == 1 else ""
+
             st.markdown(
                 f"""
                 <div class="hall-card">
                     <div class="hall-name">{medalha} {html.escape(str(row.get('Mini', '-')))}</div>
-                    <div class="hall-meta">{html.escape(str(row.get('Categoria', '-')))} • Score {html.escape(str(row.get('Score', 0)))}</div>
+                    <div class="hall-meta">{html.escape(str(row.get('Categoria', '-')))} • Score {html.escape(str(row.get('Score', 0)))}{favorito_tag}</div>
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -1499,13 +1510,17 @@ if menu == "Dashboard":
                 "Marca": mini[2],
                 "Raridade": mini[4],
                 "Favorito": "💛 Sim" if mini[8] else "",
+                "Favorito_ord": 1 if mini[8] else 0,
                 "Categoria": categoria_elite(score),
                 "Score": score,
                 "Valor atual": mini[10],
                 "Valorização": float(mini[10] or 0) - float(mini[6] or 0),
             })
 
-        df_rank_elite = pd.DataFrame(ranking_elite).sort_values("Score", ascending=False)
+        df_rank_elite = pd.DataFrame(ranking_elite).sort_values(
+            ["Favorito_ord", "Score"],
+            ascending=[False, False]
+        )
         score_total = int(df_rank_elite["Score"].sum()) if not df_rank_elite.empty else 0
         elite_total = int((df_rank_elite["Score"] >= 70).sum()) if not df_rank_elite.empty else 0
 
