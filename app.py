@@ -1030,7 +1030,7 @@ def classe_badge(raridade):
 # SCORE / ELITE SYSTEM
 # =========================================================
 
-def calcular_score_mini(nome, marca, serie, raridade):
+def calcular_score_mini(nome, marca, serie, raridade, favorito=False):
     score = 0
     texto = f"{nome} {marca} {serie} {raridade}".lower()
 
@@ -1072,6 +1072,11 @@ def calcular_score_mini(nome, marca, serie, raridade):
     if "mustang" in texto or "camaro" in texto or "chevy" in texto or "challenger" in texto:
         score += 8
 
+    # Boost emocional: minis favoritados pelo colecionador
+    # entram com mais força no Ranking Elite e no Hall da Fama.
+    if favorito:
+        score += 35
+
     return int(score)
 
 
@@ -1095,8 +1100,8 @@ def classe_elite_chip(score):
     return "elite-chip-street"
 
 
-def render_elite_chip(nome, marca, serie, raridade):
-    score = calcular_score_mini(nome, marca, serie, raridade)
+def render_elite_chip(nome, marca, serie, raridade, favorito=False):
+    score = calcular_score_mini(nome, marca, serie, raridade, favorito)
     categoria = categoria_elite(score)
     css = classe_elite_chip(score)
 
@@ -1488,11 +1493,12 @@ if menu == "Dashboard":
 
         ranking_elite = []
         for mini in minis:
-            score = calcular_score_mini(mini[1], mini[2], mini[3], mini[4])
+            score = calcular_score_mini(mini[1], mini[2], mini[3], mini[4], mini[8])
             ranking_elite.append({
                 "Mini": mini[1],
                 "Marca": mini[2],
                 "Raridade": mini[4],
+                "Favorito": "💛 Sim" if mini[8] else "",
                 "Categoria": categoria_elite(score),
                 "Score": score,
                 "Valor atual": mini[10],
@@ -1598,7 +1604,7 @@ if menu == "Dashboard":
             st.markdown("### 🏆 Ranking Elite da Garagem")
             st.caption("Top 15 minis por força de coleção.")
             st.dataframe(
-                df_rank_elite[["Mini", "Marca", "Raridade", "Categoria", "Score"]].head(15),
+                df_rank_elite[["Mini", "Marca", "Raridade", "Favorito", "Categoria", "Score"]].head(15),
                 use_container_width=True,
                 hide_index=True
             )
@@ -1727,7 +1733,7 @@ if menu == "Ver coleção":
                     f'<div class="badge {badge_css}">{html.escape(str(raridade or "Comum"))}</div>',
                     unsafe_allow_html=True
                 )
-                render_elite_chip(nome, marca, serie, raridade)
+                render_elite_chip(nome, marca, serie, raridade, favorito)
 
                 m1, m2 = st.columns(2)
                 m1.metric("💰 Valor pago", dinheiro(valor))
@@ -2020,7 +2026,7 @@ if menu == "Ver coleção":
                                 f'<div class="badge {badge_css}">{html.escape(str(raridade or "Comum"))}</div>',
                                 unsafe_allow_html=True
                             )
-                            render_elite_chip(nome, marca, serie, raridade)
+                            render_elite_chip(nome, marca, serie, raridade, favorito)
                             st.markdown(
                                 f'<div class="mini-title">{"💛 " if favorito else ""}{html.escape(str(nome or ""))}</div>',
                                 unsafe_allow_html=True
