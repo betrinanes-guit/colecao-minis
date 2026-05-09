@@ -7,6 +7,11 @@ from urllib.parse import unquote
 import pandas as pd
 import streamlit as st
 
+try:
+    import altair as alt
+except Exception:
+    alt = None
+
 from datetime import datetime
 from pathlib import Path
 from supabase import create_client
@@ -416,6 +421,134 @@ st.markdown("""
     div[data-testid="stExpander"] summary {
         font-weight: 900 !important;
         color: #E2E8F0 !important;
+    }
+
+
+
+    /* ================= DASHBOARD VISUAL PREMIUM ================= */
+    .premium-metric-card {
+        background:
+            radial-gradient(circle at top right, rgba(56,189,248,0.18), transparent 34%),
+            linear-gradient(145deg, rgba(15,23,42,0.98), rgba(2,6,23,0.98));
+        border: 1px solid rgba(56,189,248,0.20);
+        border-radius: 24px;
+        padding: 18px 18px 16px 18px;
+        box-shadow: 0 18px 42px rgba(0,0,0,0.36);
+        min-height: 130px;
+    }
+
+    .premium-metric-label {
+        color: #94A3B8;
+        font-size: 13px;
+        font-weight: 800;
+        margin-bottom: 10px;
+    }
+
+    .premium-metric-value {
+        color: #FFFFFF;
+        font-size: 30px;
+        line-height: 1.05;
+        font-weight: 950;
+        letter-spacing: -0.8px;
+        margin-bottom: 8px;
+    }
+
+    .premium-metric-sub {
+        color: #38BDF8;
+        font-size: 12px;
+        font-weight: 900;
+    }
+
+    .visual-panel {
+        background:
+            radial-gradient(circle at top left, rgba(168,85,247,0.14), transparent 34%),
+            linear-gradient(145deg, rgba(15,23,42,0.97), rgba(2,6,23,0.98));
+        border: 1px solid rgba(148,163,184,0.22);
+        border-radius: 28px;
+        padding: 22px;
+        box-shadow: 0 18px 46px rgba(0,0,0,0.38);
+        margin-bottom: 18px;
+    }
+
+    .visual-panel-title {
+        font-size: 22px;
+        font-weight: 950;
+        color: #FFFFFF;
+        margin-bottom: 4px;
+    }
+
+    .visual-panel-subtitle {
+        color: #94A3B8;
+        font-size: 13px;
+        font-weight: 700;
+        margin-bottom: 16px;
+    }
+
+    .feature-card {
+        background:
+            radial-gradient(circle at top right, rgba(56,189,248,0.18), transparent 38%),
+            linear-gradient(145deg, rgba(15,23,42,0.98), rgba(2,6,23,0.98));
+        border: 1px solid rgba(56,189,248,0.22);
+        border-radius: 24px;
+        padding: 18px;
+        box-shadow: 0 18px 42px rgba(0,0,0,0.34);
+        min-height: 165px;
+    }
+
+    .feature-tag {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 950;
+        color: #7DD3FC;
+        border: 1px solid rgba(56,189,248,0.38);
+        background: rgba(56,189,248,0.10);
+        margin-bottom: 12px;
+    }
+
+    .feature-name {
+        font-size: 18px;
+        font-weight: 950;
+        color: #FFFFFF;
+        line-height: 1.18;
+        margin-bottom: 12px;
+        min-height: 42px;
+    }
+
+    .feature-meta {
+        color: #CBD5E1;
+        font-size: 13px;
+        font-weight: 750;
+        margin-bottom: 10px;
+    }
+
+    .feature-value {
+        color: #86EFAC;
+        font-size: 18px;
+        font-weight: 950;
+    }
+
+    .hall-card {
+        background: rgba(15,23,42,0.62);
+        border: 1px solid rgba(148,163,184,0.18);
+        border-radius: 18px;
+        padding: 14px;
+        margin-bottom: 10px;
+    }
+
+    .hall-name {
+        color: #FFFFFF;
+        font-weight: 950;
+        font-size: 14px;
+        line-height: 1.25;
+    }
+
+    .hall-meta {
+        color: #94A3B8;
+        font-weight: 800;
+        font-size: 12px;
+        margin-top: 6px;
     }
 
     /* ================= MOBILE PREMIUM ================= */
@@ -1049,6 +1182,111 @@ def render_bar_list(titulo, serie, formato="dinheiro"):
             st.markdown("---")
 
 
+
+def render_metric_card(label, value, subtitle="", icon="🚗"):
+    st.markdown(
+        f"""
+        <div class="premium-metric-card">
+            <div class="premium-metric-label">{html.escape(str(icon))} {html.escape(str(label))}</div>
+            <div class="premium-metric-value">{html.escape(str(value))}</div>
+            <div class="premium-metric-sub">{html.escape(str(subtitle))}</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+def render_feature_card(tag, nome, meta, valor, valor_cor="#86EFAC"):
+    st.markdown(
+        f"""
+        <div class="feature-card">
+            <div class="feature-tag">{html.escape(str(tag))}</div>
+            <div class="feature-name">{html.escape(str(nome or '-'))}</div>
+            <div class="feature-meta">{html.escape(str(meta or '-'))}</div>
+            <div class="feature-value" style="color:{valor_cor};">{html.escape(str(valor or '-'))}</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+def render_visual_panel(titulo, subtitulo=""):
+    st.markdown(
+        f"""
+        <div class="visual-panel">
+            <div class="visual-panel-title">{html.escape(str(titulo))}</div>
+            <div class="visual-panel-subtitle">{html.escape(str(subtitulo))}</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+def render_donut_chart(df_chart, label_col, value_col, titulo, subtitulo=""):
+    with st.container(border=True):
+        st.markdown(f"### {titulo}")
+        if subtitulo:
+            st.caption(subtitulo)
+
+        if df_chart is None or df_chart.empty:
+            st.info("Sem dados suficientes.")
+            return
+
+        df_chart = df_chart.copy()
+        df_chart[value_col] = pd.to_numeric(df_chart[value_col], errors="coerce").fillna(0)
+        df_chart = df_chart[df_chart[value_col] > 0]
+
+        if df_chart.empty:
+            st.info("Sem dados suficientes.")
+            return
+
+        if alt is not None:
+            chart = (
+                alt.Chart(df_chart)
+                .mark_arc(innerRadius=72, outerRadius=118, cornerRadius=6)
+                .encode(
+                    theta=alt.Theta(field=value_col, type="quantitative"),
+                    color=alt.Color(field=label_col, type="nominal", legend=alt.Legend(title=None, orient="bottom")),
+                    tooltip=[
+                        alt.Tooltip(field=label_col, type="nominal", title="Categoria"),
+                        alt.Tooltip(field=value_col, type="quantitative", title="Valor"),
+                    ],
+                )
+                .properties(height=330)
+            )
+            st.altair_chart(chart, use_container_width=True)
+        else:
+            st.bar_chart(df_chart.set_index(label_col)[value_col], use_container_width=True)
+
+        total = float(df_chart[value_col].sum())
+        for _, row in df_chart.head(5).iterrows():
+            percentual = 0 if total <= 0 else round((float(row[value_col]) / total) * 100, 1)
+            st.caption(f"{row[label_col]} • {percentual}%")
+
+
+def render_hall_da_fama(df_rank_elite):
+    with st.container(border=True):
+        st.markdown("### 🏁 Hall da Fama")
+        st.caption("Os minis com maior força de coleção pelo Elite Score.")
+
+        if df_rank_elite is None or df_rank_elite.empty:
+            st.info("Sem dados para o Hall da Fama.")
+            return
+
+        top = df_rank_elite.head(6)
+        for idx, row in top.iterrows():
+            medalha = "🥇" if idx == top.index[0] else "🥈" if idx == top.index[1] else "🥉" if idx == top.index[2] else "🏎️"
+            st.markdown(
+                f"""
+                <div class="hall-card">
+                    <div class="hall-name">{medalha} {html.escape(str(row.get('Mini', '-')))}</div>
+                    <div class="hall-meta">{html.escape(str(row.get('Categoria', '-')))} • Score {html.escape(str(row.get('Score', 0)))}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+
 def render_top_valorizacao(df_dash):
     if df_dash.empty:
         st.info("Sem dados para ranking.")
@@ -1224,54 +1462,13 @@ if st.session_state.ml_feedback:
 
 
 if menu == "Dashboard":
-    st.header("Dashboard da coleção")
+    st.header("Dashboard Visual Premium")
 
     minis = listar()
 
     if not minis:
         st.info("Ainda não há minis cadastradas.")
     else:
-        total_minis = len(minis)
-        valor_total = sum([m[6] for m in minis if m[6]])
-        preco_total = sum([m[10] for m in minis if m[10]])
-        valorizacao_total = preco_total - valor_total
-
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("🚗 Total de minis", total_minis)
-        c2.metric("💰 Total pago", dinheiro(valor_total))
-        c3.metric("📈 Valor atual", dinheiro(preco_total))
-        c4.metric("🔥 Valorização", dinheiro(valorizacao_total))
-
-        ranking_elite = []
-        for mini in minis:
-            score = calcular_score_mini(mini[1], mini[2], mini[3], mini[4])
-            ranking_elite.append({
-                "Mini": mini[1],
-                "Marca": mini[2],
-                "Raridade": mini[4],
-                "Categoria": categoria_elite(score),
-                "Score": score,
-            })
-
-        df_rank_elite = pd.DataFrame(ranking_elite).sort_values("Score", ascending=False)
-        score_total = int(df_rank_elite["Score"].sum()) if not df_rank_elite.empty else 0
-        elite_total = int((df_rank_elite["Score"] >= 70).sum()) if not df_rank_elite.empty else 0
-        hype_total = int(((df_rank_elite["Score"] >= 45) & (df_rank_elite["Score"] < 70)).sum()) if not df_rank_elite.empty else 0
-        jdm_total = int(df_rank_elite["Categoria"].astype(str).str.contains("JDM", na=False).sum()) if not df_rank_elite.empty else 0
-
-        e1, e2, e3, e4 = st.columns(4)
-        e1.metric("🏆 Elite Score", score_total)
-        e2.metric("💎 Minis Elite", elite_total)
-        e3.metric("🔥 Hype", hype_total)
-        e4.metric("🏁 JDM Score", jdm_total)
-
-        st.markdown("### 🏆 Ranking Elite da Garagem")
-        st.dataframe(
-            df_rank_elite.head(15),
-            use_container_width=True,
-            hide_index=True
-        )
-
         df_dash = pd.DataFrame(minis, columns=[
             "id", "nome", "marca", "serie", "raridade", "status", "valor_pago", "foto",
             "favorito", "link_compra", "preco_atual", "observacoes", "atualizado_em"
@@ -1283,22 +1480,134 @@ if menu == "Dashboard":
         df_dash["preco_atual"] = pd.to_numeric(df_dash["preco_atual"], errors="coerce").fillna(0)
         df_dash["valorizacao"] = df_dash["preco_atual"] - df_dash["valor_pago"]
 
-        render_top_valorizacao(df_dash)
+        total_minis = len(df_dash)
+        valor_total = float(df_dash["valor_pago"].sum())
+        preco_total = float(df_dash["preco_atual"].sum())
+        valorizacao_total = preco_total - valor_total
+        favoritos_total = int(df_dash["favorito"].sum()) if "favorito" in df_dash.columns else 0
 
-        col_dash1, col_dash2 = st.columns(2)
+        ranking_elite = []
+        for mini in minis:
+            score = calcular_score_mini(mini[1], mini[2], mini[3], mini[4])
+            ranking_elite.append({
+                "Mini": mini[1],
+                "Marca": mini[2],
+                "Raridade": mini[4],
+                "Categoria": categoria_elite(score),
+                "Score": score,
+                "Valor atual": mini[10],
+                "Valorização": float(mini[10] or 0) - float(mini[6] or 0),
+            })
 
-        with col_dash1:
+        df_rank_elite = pd.DataFrame(ranking_elite).sort_values("Score", ascending=False)
+        score_total = int(df_rank_elite["Score"].sum()) if not df_rank_elite.empty else 0
+        elite_total = int((df_rank_elite["Score"] >= 70).sum()) if not df_rank_elite.empty else 0
+
+        k1, k2, k3, k4, k5 = st.columns(5)
+        with k1:
+            render_metric_card("Total", f"{total_minis}", "minis cadastrados", "🚗")
+        with k2:
+            render_metric_card("Pago", dinheiro(valor_total), "investimento", "💰")
+        with k3:
+            render_metric_card("Atual", dinheiro(preco_total), "valor estimado", "📈")
+        with k4:
+            render_metric_card("Valorização", dinheiro(valorizacao_total), "saldo da garagem", "🔥")
+        with k5:
+            render_metric_card("Elite Score", f"{score_total}", f"{elite_total} elite", "🏆")
+
+        st.markdown("---")
+
+        top_valor = df_dash.sort_values("preco_atual", ascending=False).head(1)
+        top_valorizacao = df_dash.sort_values("valorizacao", ascending=False).head(1)
+        top_score = df_rank_elite.head(1)
+
+        fc1, fc2, fc3 = st.columns(3)
+        with fc1:
+            if not top_valor.empty:
+                row = top_valor.iloc[0]
+                render_feature_card(
+                    "💎 MAIS VALIOSO",
+                    row.get("nome", "-"),
+                    f"{row.get('marca', '-')} • {row.get('raridade', '-')}",
+                    dinheiro(row.get("preco_atual", 0)),
+                    "#7DD3FC"
+                )
+        with fc2:
+            if not top_valorizacao.empty:
+                row = top_valorizacao.iloc[0]
+                render_feature_card(
+                    "📈 MAIS VALORIZADO",
+                    row.get("nome", "-"),
+                    f"Pago {dinheiro(row.get('valor_pago', 0))} • Atual {dinheiro(row.get('preco_atual', 0))}",
+                    "+" + dinheiro(row.get("valorizacao", 0)) if row.get("valorizacao", 0) >= 0 else dinheiro(row.get("valorizacao", 0)),
+                    "#86EFAC"
+                )
+        with fc3:
+            if not top_score.empty:
+                row = top_score.iloc[0]
+                render_feature_card(
+                    "🏆 MELHOR SCORE",
+                    row.get("Mini", "-"),
+                    f"{row.get('Categoria', '-')} • {row.get('Marca', '-')}",
+                    f"Score {int(row.get('Score', 0))}",
+                    "#FDE68A"
+                )
+
+        st.markdown("---")
+
+        col_chart1, col_chart2 = st.columns([1, 1])
+
+        with col_chart1:
             por_marca = (
                 df_dash.groupby("marca", dropna=False)["preco_atual"]
                 .sum()
                 .sort_values(ascending=False)
-                .head(10)
+                .head(8)
+                .reset_index()
+                .rename(columns={"marca": "Categoria", "preco_atual": "Valor"})
             )
-            render_bar_list("📊 Valor atual por marca", por_marca, formato="dinheiro")
+            render_donut_chart(
+                por_marca,
+                "Categoria",
+                "Valor",
+                "📊 Valor por marca",
+                "Distribuição do valor atual estimado."
+            )
 
-        with col_dash2:
-            por_raridade = df_dash["raridade"].value_counts().head(10)
-            render_bar_list("⭐ Quantidade por raridade", por_raridade, formato="inteiro")
+        with col_chart2:
+            por_raridade = (
+                df_dash["raridade"]
+                .value_counts()
+                .head(8)
+                .reset_index()
+            )
+            por_raridade.columns = ["Categoria", "Quantidade"]
+            render_donut_chart(
+                por_raridade,
+                "Categoria",
+                "Quantidade",
+                "⭐ Distribuição por raridade",
+                "Como sua coleção está classificada hoje."
+            )
+
+        st.markdown("---")
+
+        col_rank1, col_rank2 = st.columns([1.25, 1])
+
+        with col_rank1:
+            st.markdown("### 🏆 Ranking Elite da Garagem")
+            st.caption("Top 15 minis por força de coleção.")
+            st.dataframe(
+                df_rank_elite[["Mini", "Marca", "Raridade", "Categoria", "Score"]].head(15),
+                use_container_width=True,
+                hide_index=True
+            )
+
+        with col_rank2:
+            render_hall_da_fama(df_rank_elite)
+
+        st.markdown("---")
+        render_top_valorizacao(df_dash)
 
 
 
